@@ -1,0 +1,6 @@
+@ImportadoraApi_HostAddress = http://localhost:5029
+
+GET {{ImportadoraApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
