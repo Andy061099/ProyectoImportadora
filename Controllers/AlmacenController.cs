@@ -18,7 +18,7 @@ namespace ImportadoraApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Almacen>>> GetAlmacenes()
         {
-            return await _context.Almacenes.ToListAsync();
+            return await _context.Almacenes.Include(k => k.inventario).ThenInclude(k => k.Productos).ToListAsync();
         }
 
         [HttpGet("{id}")]

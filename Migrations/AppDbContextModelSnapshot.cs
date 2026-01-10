@@ -173,21 +173,15 @@ namespace ImportadoraApi.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal>("CostoDescarga")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("CostoNacionalizacion")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("CostoTransporte")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("Estado")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("Estado")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("FechaArribo")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NombreContenedor")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<decimal>("PorcentajeVendido")
                         .HasColumnType("numeric");
@@ -203,10 +197,10 @@ namespace ImportadoraApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AlmacenDestinoId")
-                        .HasColumnType("uuid");
-
                     b.Property<decimal>("CantidadRecibida")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("Cantidadactual")
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("Cantidadmerma")
@@ -229,13 +223,71 @@ namespace ImportadoraApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AlmacenDestinoId");
-
                     b.HasIndex("ContenedorId");
 
                     b.HasIndex("ProductoId");
 
-                    b.ToTable("ContenedorDetalle");
+                    b.ToTable("ContenedorDetalles");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.CostosContenedor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Idcotenedor")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Monto")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Idcotenedor");
+
+                    b.ToTable("CostosContenedores");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.DistribucionProducto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AlmacenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Cantidad")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid?>("ContenedorDetalleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrigenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlmacenId");
+
+                    b.HasIndex("ContenedorDetalleId");
+
+                    b.HasIndex("ProductoId");
+
+                    b.ToTable("DistribucionProductos");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.Inventario", b =>
@@ -264,9 +316,6 @@ namespace ImportadoraApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("Activo")
-                        .HasColumnType("boolean");
-
                     b.Property<decimal>("Cantproductosxpacka")
                         .HasColumnType("numeric");
 
@@ -282,12 +331,6 @@ namespace ImportadoraApi.Migrations
                     b.Property<decimal>("StockActual")
                         .HasColumnType("numeric");
 
-                    b.Property<decimal>("StockMinimo")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("UbicacionFisica")
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
 
                     b.HasIndex("InventarioId");
@@ -295,6 +338,42 @@ namespace ImportadoraApi.Migrations
                     b.HasIndex("ProductoId");
 
                     b.ToTable("InventarioProductos");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.Merma", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AlmacenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Cantidad")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProductoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlmacenId");
+
+                    b.HasIndex("ProductoId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("Mermas");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.MovimientoInventario", b =>
@@ -342,6 +421,28 @@ namespace ImportadoraApi.Migrations
                     b.ToTable("MovimientosInventario");
                 });
 
+            modelBuilder.Entity("ImportadoraApi.Models.Pagos", b =>
+                {
+                    b.Property<Guid>("id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("VentaDetalleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("cantidad")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("tipoMoneda")
+                        .HasColumnType("integer");
+
+                    b.HasKey("id");
+
+                    b.HasIndex("VentaDetalleId");
+
+                    b.ToTable("Pagos");
+                });
+
             modelBuilder.Entity("ImportadoraApi.Models.Producto", b =>
                 {
                     b.Property<Guid>("Id")
@@ -357,6 +458,9 @@ namespace ImportadoraApi.Migrations
 
                     b.Property<string>("Descripcion")
                         .HasColumnType("text");
+
+                    b.Property<int>("MonedaDeEntrada")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Nombre")
                         .IsRequired()
@@ -386,12 +490,11 @@ namespace ImportadoraApi.Migrations
                     b.Property<Guid?>("AlmacenId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Categoria")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Moneda")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("Monto")
                         .HasColumnType("numeric");
@@ -463,6 +566,9 @@ namespace ImportadoraApi.Migrations
                     b.Property<string>("Cliente")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("Consignacionid")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasColumnType("text");
@@ -482,9 +588,6 @@ namespace ImportadoraApi.Migrations
                     b.Property<Guid>("UsuarioId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("consignacionid")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("AlmacenId");
@@ -501,6 +604,9 @@ namespace ImportadoraApi.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Cantidad")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("Impuestos")
                         .HasColumnType("numeric");
 
                     b.Property<Guid>("InventarioProductoId")
@@ -592,12 +698,6 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.ContenedorDetalle", b =>
                 {
-                    b.HasOne("ImportadoraApi.Models.Almacen", "AlmacenDestino")
-                        .WithMany()
-                        .HasForeignKey("AlmacenDestinoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("ImportadoraApi.Models.Contenedor", "Contenedor")
                         .WithMany("Detalles")
                         .HasForeignKey("ContenedorId")
@@ -610,9 +710,41 @@ namespace ImportadoraApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("AlmacenDestino");
-
                     b.Navigation("Contenedor");
+
+                    b.Navigation("Producto");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.CostosContenedor", b =>
+                {
+                    b.HasOne("ImportadoraApi.Models.Contenedor", "contenedorasignado")
+                        .WithMany("Costos")
+                        .HasForeignKey("Idcotenedor")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("contenedorasignado");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.DistribucionProducto", b =>
+                {
+                    b.HasOne("ImportadoraApi.Models.Almacen", "Almacen")
+                        .WithMany()
+                        .HasForeignKey("AlmacenId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ImportadoraApi.Models.ContenedorDetalle", null)
+                        .WithMany("Distribuciones")
+                        .HasForeignKey("ContenedorDetalleId");
+
+                    b.HasOne("ImportadoraApi.Models.Producto", "Producto")
+                        .WithMany()
+                        .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Almacen");
 
                     b.Navigation("Producto");
                 });
@@ -647,6 +779,29 @@ namespace ImportadoraApi.Migrations
                     b.Navigation("Producto");
                 });
 
+            modelBuilder.Entity("ImportadoraApi.Models.Merma", b =>
+                {
+                    b.HasOne("ImportadoraApi.Models.Almacen", "Almacen")
+                        .WithMany()
+                        .HasForeignKey("AlmacenId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ImportadoraApi.Models.Producto", "Producto")
+                        .WithMany()
+                        .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ImportadoraApi.Models.Usuario", null)
+                        .WithMany("Mermas")
+                        .HasForeignKey("UsuarioId");
+
+                    b.Navigation("Almacen");
+
+                    b.Navigation("Producto");
+                });
+
             modelBuilder.Entity("ImportadoraApi.Models.MovimientoInventario", b =>
                 {
                     b.HasOne("ImportadoraApi.Models.InventarioProducto", "InventarioProducto")
@@ -664,6 +819,13 @@ namespace ImportadoraApi.Migrations
                     b.Navigation("InventarioProducto");
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.Pagos", b =>
+                {
+                    b.HasOne("ImportadoraApi.Models.VentaDetalle", null)
+                        .WithMany("monedas")
+                        .HasForeignKey("VentaDetalleId");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.RegistroFinanciero", b =>
@@ -723,7 +885,8 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.Almacen", b =>
                 {
-                    b.Navigation("inventario");
+                    b.Navigation("inventario")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.CierreDiario", b =>
@@ -738,7 +901,14 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.Contenedor", b =>
                 {
+                    b.Navigation("Costos");
+
                     b.Navigation("Detalles");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.ContenedorDetalle", b =>
+                {
+                    b.Navigation("Distribuciones");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.Inventario", b =>
@@ -760,6 +930,8 @@ namespace ImportadoraApi.Migrations
                 {
                     b.Navigation("Consignaciones");
 
+                    b.Navigation("Mermas");
+
                     b.Navigation("Movimientos");
 
                     b.Navigation("RegistrosFinancieros");
@@ -772,6 +944,11 @@ namespace ImportadoraApi.Migrations
                     b.Navigation("Consignacion");
 
                     b.Navigation("Detalles");
+                });
+
+            modelBuilder.Entity("ImportadoraApi.Models.VentaDetalle", b =>
+                {
+                    b.Navigation("monedas");
                 });
 #pragma warning restore 612, 618
         }

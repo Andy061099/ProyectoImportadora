@@ -13,6 +13,7 @@ namespace ImportadoraApi.Models
         public ICollection<MovimientoInventario> Movimientos { get; set; } = new List<MovimientoInventario>();
         public ICollection<Venta> Ventas { get; set; } = new List<Venta>();
 
+        public ICollection<Merma> Mermas { get; set; } = new List<Merma>();
 
         public ICollection<RegistroFinanciero> RegistrosFinancieros { get; set; } = new List<RegistroFinanciero>();
         public ICollection<ConsignacionMovimiento> Consignaciones { get; set; } = new List<ConsignacionMovimiento>();

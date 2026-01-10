@@ -33,11 +33,9 @@ namespace ImportadoraApi.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Codigo = table.Column<string>(type: "text", nullable: false),
                     FechaArribo = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CostoNacionalizacion = table.Column<decimal>(type: "numeric", nullable: false),
-                    CostoTransporte = table.Column<decimal>(type: "numeric", nullable: false),
-                    CostoDescarga = table.Column<decimal>(type: "numeric", nullable: false),
+                    NombreContenedor = table.Column<string>(type: "text", nullable: false),
                     PorcentajeVendido = table.Column<decimal>(type: "numeric", nullable: false),
-                    Estado = table.Column<string>(type: "text", nullable: false)
+                    Estado = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -55,7 +53,8 @@ namespace ImportadoraApi.Migrations
                     UnidadMedida = table.Column<string>(type: "text", nullable: false),
                     CostoUnitario = table.Column<decimal>(type: "numeric", nullable: false),
                     PrecioMayorista = table.Column<decimal>(type: "numeric", nullable: false),
-                    PrecioMinorista = table.Column<decimal>(type: "numeric", nullable: false)
+                    PrecioMinorista = table.Column<decimal>(type: "numeric", nullable: false),
+                    MonedaDeEntrada = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -98,14 +97,34 @@ namespace ImportadoraApi.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ContenedorDetalle",
+                name: "CostosContenedores",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Idcotenedor = table.Column<Guid>(type: "uuid", nullable: false),
+                    Tipo = table.Column<int>(type: "integer", nullable: false),
+                    Monto = table.Column<decimal>(type: "numeric", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CostosContenedores", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CostosContenedores_Contenedores_Idcotenedor",
+                        column: x => x.Idcotenedor,
+                        principalTable: "Contenedores",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ContenedorDetalles",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ContenedorId = table.Column<Guid>(type: "uuid", nullable: false),
                     ProductoId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AlmacenDestinoId = table.Column<Guid>(type: "uuid", nullable: false),
                     CantidadRecibida = table.Column<decimal>(type: "numeric", nullable: false),
+                    Cantidadactual = table.Column<decimal>(type: "numeric", nullable: false),
                     Packa = table.Column<bool>(type: "boolean", nullable: false),
                     Cantproductosxpacka = table.Column<decimal>(type: "numeric", nullable: false),
                     Cantidadmerma = table.Column<decimal>(type: "numeric", nullable: false),
@@ -113,21 +132,15 @@ namespace ImportadoraApi.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ContenedorDetalle", x => x.Id);
+                    table.PrimaryKey("PK_ContenedorDetalles", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ContenedorDetalle_Almacenes_AlmacenDestinoId",
-                        column: x => x.AlmacenDestinoId,
-                        principalTable: "Almacenes",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ContenedorDetalle_Contenedores_ContenedorId",
+                        name: "FK_ContenedorDetalles_Contenedores_ContenedorId",
                         column: x => x.ContenedorId,
                         principalTable: "Contenedores",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_ContenedorDetalle_Productos_ProductoId",
+                        name: "FK_ContenedorDetalles_Productos_ProductoId",
                         column: x => x.ProductoId,
                         principalTable: "Productos",
                         principalColumn: "Id",
@@ -165,16 +178,50 @@ namespace ImportadoraApi.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Mermas",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Fecha = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    AlmacenId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProductoId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Cantidad = table.Column<decimal>(type: "numeric", nullable: false),
+                    Motivo = table.Column<string>(type: "text", nullable: false),
+                    UsuarioId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Mermas", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Mermas_Almacenes_AlmacenId",
+                        column: x => x.AlmacenId,
+                        principalTable: "Almacenes",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Mermas_Productos_ProductoId",
+                        column: x => x.ProductoId,
+                        principalTable: "Productos",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Mermas_Usuarios_UsuarioId",
+                        column: x => x.UsuarioId,
+                        principalTable: "Usuarios",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RegistrosFinancieros",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Fecha = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     Tipo = table.Column<int>(type: "integer", nullable: false),
-                    Categoria = table.Column<string>(type: "text", nullable: false),
                     AlmacenId = table.Column<Guid>(type: "uuid", nullable: true),
                     Monto = table.Column<decimal>(type: "numeric", nullable: false),
                     ReferenciaTipo = table.Column<string>(type: "text", nullable: false),
+                    Moneda = table.Column<int>(type: "integer", nullable: false),
                     ReferenciaId = table.Column<Guid>(type: "uuid", nullable: true),
                     Observaciones = table.Column<string>(type: "text", nullable: true),
                     UsuarioId = table.Column<Guid>(type: "uuid", nullable: false)
@@ -207,7 +254,7 @@ namespace ImportadoraApi.Migrations
                     Total = table.Column<decimal>(type: "numeric", nullable: false),
                     TotalPagado = table.Column<decimal>(type: "numeric", nullable: false),
                     Estado = table.Column<string>(type: "text", nullable: false),
-                    consignacionid = table.Column<Guid>(type: "uuid", nullable: true),
+                    Consignacionid = table.Column<Guid>(type: "uuid", nullable: true),
                     UsuarioId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
@@ -235,9 +282,6 @@ namespace ImportadoraApi.Migrations
                     InventarioId = table.Column<Guid>(type: "uuid", nullable: false),
                     ProductoId = table.Column<Guid>(type: "uuid", nullable: false),
                     StockActual = table.Column<decimal>(type: "numeric", nullable: false),
-                    StockMinimo = table.Column<decimal>(type: "numeric", nullable: false),
-                    UbicacionFisica = table.Column<string>(type: "text", nullable: true),
-                    Activo = table.Column<bool>(type: "boolean", nullable: false),
                     Packa = table.Column<bool>(type: "boolean", nullable: false),
                     Cantproductosxpacka = table.Column<decimal>(type: "numeric", nullable: false)
                 },
@@ -252,6 +296,41 @@ namespace ImportadoraApi.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_InventarioProductos_Productos_ProductoId",
+                        column: x => x.ProductoId,
+                        principalTable: "Productos",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DistribucionProductos",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrigenId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProductoId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AlmacenId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Cantidad = table.Column<decimal>(type: "numeric", nullable: false),
+                    Fecha = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UsuarioId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContenedorDetalleId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DistribucionProductos", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DistribucionProductos_Almacenes_AlmacenId",
+                        column: x => x.AlmacenId,
+                        principalTable: "Almacenes",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DistribucionProductos_ContenedorDetalles_ContenedorDetalleId",
+                        column: x => x.ContenedorDetalleId,
+                        principalTable: "ContenedorDetalles",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_DistribucionProductos_Productos_ProductoId",
                         column: x => x.ProductoId,
                         principalTable: "Productos",
                         principalColumn: "Id",
@@ -346,7 +425,8 @@ namespace ImportadoraApi.Migrations
                     InventarioProductoId = table.Column<Guid>(type: "uuid", nullable: false),
                     Cantidad = table.Column<decimal>(type: "numeric", nullable: false),
                     PrecioUnitario = table.Column<decimal>(type: "numeric", nullable: false),
-                    Subtotal = table.Column<decimal>(type: "numeric", nullable: false)
+                    Subtotal = table.Column<decimal>(type: "numeric", nullable: false),
+                    Impuestos = table.Column<decimal>(type: "numeric", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -393,6 +473,25 @@ namespace ImportadoraApi.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "Pagos",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    cantidad = table.Column<decimal>(type: "numeric", nullable: false),
+                    tipoMoneda = table.Column<int>(type: "integer", nullable: false),
+                    VentaDetalleId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Pagos", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_Pagos_VentaDetalles_VentaDetalleId",
+                        column: x => x.VentaDetalleId,
+                        principalTable: "VentaDetalles",
+                        principalColumn: "Id");
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_CierreDiarioRegistros_CierreDiarioId",
                 table: "CierreDiarioRegistros",
@@ -430,18 +529,33 @@ namespace ImportadoraApi.Migrations
                 column: "UsuarioId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContenedorDetalle_AlmacenDestinoId",
-                table: "ContenedorDetalle",
-                column: "AlmacenDestinoId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ContenedorDetalle_ContenedorId",
-                table: "ContenedorDetalle",
+                name: "IX_ContenedorDetalles_ContenedorId",
+                table: "ContenedorDetalles",
                 column: "ContenedorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContenedorDetalle_ProductoId",
-                table: "ContenedorDetalle",
+                name: "IX_ContenedorDetalles_ProductoId",
+                table: "ContenedorDetalles",
+                column: "ProductoId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CostosContenedores_Idcotenedor",
+                table: "CostosContenedores",
+                column: "Idcotenedor");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistribucionProductos_AlmacenId",
+                table: "DistribucionProductos",
+                column: "AlmacenId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistribucionProductos_ContenedorDetalleId",
+                table: "DistribucionProductos",
+                column: "ContenedorDetalleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistribucionProductos_ProductoId",
+                table: "DistribucionProductos",
                 column: "ProductoId");
 
             migrationBuilder.CreateIndex(
@@ -461,6 +575,21 @@ namespace ImportadoraApi.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Mermas_AlmacenId",
+                table: "Mermas",
+                column: "AlmacenId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Mermas_ProductoId",
+                table: "Mermas",
+                column: "ProductoId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Mermas_UsuarioId",
+                table: "Mermas",
+                column: "UsuarioId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_MovimientosInventario_InventarioProductoId",
                 table: "MovimientosInventario",
                 column: "InventarioProductoId");
@@ -469,6 +598,11 @@ namespace ImportadoraApi.Migrations
                 name: "IX_MovimientosInventario_UsuarioId",
                 table: "MovimientosInventario",
                 column: "UsuarioId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Pagos_VentaDetalleId",
+                table: "Pagos",
+                column: "VentaDetalleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RegistrosFinancieros_AlmacenId",
@@ -511,13 +645,19 @@ namespace ImportadoraApi.Migrations
                 name: "ConsignacionMovimientos");
 
             migrationBuilder.DropTable(
-                name: "ContenedorDetalle");
+                name: "CostosContenedores");
+
+            migrationBuilder.DropTable(
+                name: "DistribucionProductos");
+
+            migrationBuilder.DropTable(
+                name: "Mermas");
 
             migrationBuilder.DropTable(
                 name: "MovimientosInventario");
 
             migrationBuilder.DropTable(
-                name: "VentaDetalles");
+                name: "Pagos");
 
             migrationBuilder.DropTable(
                 name: "CierresDiarios");
@@ -527,6 +667,12 @@ namespace ImportadoraApi.Migrations
 
             migrationBuilder.DropTable(
                 name: "Consignaciones");
+
+            migrationBuilder.DropTable(
+                name: "ContenedorDetalles");
+
+            migrationBuilder.DropTable(
+                name: "VentaDetalles");
 
             migrationBuilder.DropTable(
                 name: "Contenedores");
