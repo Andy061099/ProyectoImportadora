@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
-
+using Microsoft.AspNetCore.Authorization;
 namespace ImportadoraApi.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class VentaController : ControllerBase

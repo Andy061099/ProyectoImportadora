@@ -9,6 +9,6 @@ public class VentaDetalleCreateDto
     public decimal PrecioUnitario { get; set; }
     public decimal Impuestos { get; set; }
 
-    public ICollection<Pagos> pagos { get; set; } = new List<Pagos>();
+    public ICollection<Pagos> Pagos { get; set; } = new List<Pagos>();
 
 }

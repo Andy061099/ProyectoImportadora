@@ -3,9 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
 using System.Security.Cryptography;
 using System.Text;
-
+using Microsoft.AspNetCore.Authorization;
 namespace ImportadoraApi.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class UsuarioController : ControllerBase

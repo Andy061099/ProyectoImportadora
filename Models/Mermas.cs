@@ -15,5 +15,8 @@ namespace ImportadoraApi.Models
         public decimal Cantidad { get; set; }
 
         public string Motivo { get; set; } = null!;
+
+        public Guid UsuarioId { get; set; }
+        public Usuario Usuario { get; set; } = null!;
     }
 }

@@ -362,7 +362,7 @@ namespace ImportadoraApi.Migrations
                     b.Property<Guid>("ProductoId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("UsuarioId")
+                    b.Property<Guid>("UsuarioId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -793,13 +793,17 @@ namespace ImportadoraApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ImportadoraApi.Models.Usuario", null)
+                    b.HasOne("ImportadoraApi.Models.Usuario", "Usuario")
                         .WithMany("Mermas")
-                        .HasForeignKey("UsuarioId");
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Almacen");
 
                     b.Navigation("Producto");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.MovimientoInventario", b =>

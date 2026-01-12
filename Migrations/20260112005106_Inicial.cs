@@ -187,7 +187,7 @@ namespace ImportadoraApi.Migrations
                     ProductoId = table.Column<Guid>(type: "uuid", nullable: false),
                     Cantidad = table.Column<decimal>(type: "numeric", nullable: false),
                     Motivo = table.Column<string>(type: "text", nullable: false),
-                    UsuarioId = table.Column<Guid>(type: "uuid", nullable: true)
+                    UsuarioId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -208,7 +208,8 @@ namespace ImportadoraApi.Migrations
                         name: "FK_Mermas_Usuarios_UsuarioId",
                         column: x => x.UsuarioId,
                         principalTable: "Usuarios",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(

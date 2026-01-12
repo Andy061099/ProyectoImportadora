@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
+using Microsoft.AspNetCore.Authorization;
 
+
+using ImportadoraApi.Responses;
 
 namespace ImportadoraApi.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class AlmacenController : ControllerBase
@@ -16,72 +20,114 @@ namespace ImportadoraApi.Controllers
             _context = context;
         }
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Almacen>>> GetAlmacenes()
+        public async Task<ActionResult<ApiResponse<IEnumerable<AlmacenResponseDto>>>> GetAlmacenes()
         {
-            return await _context.Almacenes.Include(k => k.inventario).ThenInclude(k => k.Productos).ToListAsync();
+            var almacenes = await _context.Almacenes
+                .Include(a => a.inventario)
+                .ToListAsync();
+
+            var result = almacenes.Select(a => new AlmacenResponseDto
+            {
+                Id = a.id,
+                Nombre = a.nombre,
+                NombreEncargado = a.nombreencargado,
+                Ubicacion = a.Ubicacion,
+                Descripcion = a.Descripcion,
+                InventarioId = a.inventario.Id
+            }).ToList();
+
+            return Ok(ApiResponse<IEnumerable<AlmacenResponseDto>>.Ok(
+                result,
+                "Almacenes obtenidos correctamente"
+            ));
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Almacen>> GetAlmacenById(Guid id)
+        public async Task<ActionResult<ApiResponse<AlmacenResponseDto>>> GetAlmacenById(Guid id)
         {
-            var almacen = await _context.Almacenes.Include(i => i.inventario)
+            var almacen = await _context.Almacenes
+                .Include(a => a.inventario)
                 .FirstOrDefaultAsync(a => a.id == id);
 
             if (almacen == null)
-                return NotFound($"Almacen con id {id} no encontrado");
+                return NotFound(ApiResponse<AlmacenResponseDto>.Fail($"Almacén con id {id} no encontrado", "ALMACEN_NOT_FOUND"));
 
-            return Ok(almacen);
+            var result = new AlmacenResponseDto
+            {
+                Id = almacen.id,
+                Nombre = almacen.nombre,
+                NombreEncargado = almacen.nombreencargado,
+                Ubicacion = almacen.Ubicacion,
+                Descripcion = almacen.Descripcion,
+                InventarioId = almacen.inventario.Id
+            };
+
+            return Ok(ApiResponse<AlmacenResponseDto>.Ok(result, "Almacén obtenido correctamente"));
         }
 
+
+
         [HttpPost]
-        public async Task<IActionResult> CreateAlmacen([FromBody] Almacen almacen)
+        public async Task<ActionResult<ApiResponse<AlmacenResponseDto>>> CreateAlmacen([FromBody] AlmacenCreateDto dto)
         {
-            if (almacen == null)
-                return BadRequest("El almacén es obligatorio.");
+            if (dto == null)
+                return BadRequest(ApiResponse<AlmacenResponseDto>.Fail("El cuerpo de la petición es obligatorio", "INVALID_BODY"));
 
-            almacen.id = Guid.NewGuid();
-
-            almacen.inventario = new Inventario
+            var almacen = new Almacen
             {
-                Id = Guid.NewGuid(),
-                AlmacenId = almacen.id
-
+                id = Guid.NewGuid(),
+                nombre = dto.Nombre,
+                nombreencargado = dto.NombreEncargado,
+                Ubicacion = dto.Ubicacion,
+                Descripcion = dto.Descripcion,
+                inventario = new Inventario
+                {
+                    Id = Guid.NewGuid()
+                }
             };
+
+            almacen.inventario.AlmacenId = almacen.id;
 
             _context.Almacenes.Add(almacen);
             await _context.SaveChangesAsync();
 
+            var result = new AlmacenResponseDto
+            {
+                Id = almacen.id,
+                Nombre = almacen.nombre,
+                NombreEncargado = almacen.nombreencargado,
+                Ubicacion = almacen.Ubicacion,
+                Descripcion = almacen.Descripcion,
+                InventarioId = almacen.inventario.Id
+            };
+
             return CreatedAtAction(
                 nameof(GetAlmacenById),
                 new { almacen.id },
-                almacen
+                ApiResponse<AlmacenResponseDto>.Ok(result, "Almacén creado correctamente")
             );
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateAlmacen(Guid id, [FromBody] Almacen almacen)
+        public async Task<ActionResult<ApiResponse<object>>> UpdateAlmacen(Guid id, [FromBody] AlmacenUpdateDto dto)
         {
-            if (almacen == null)
-                return BadRequest("El almacen es obligatorio.");
-
-            if (id != almacen.id)
-                return BadRequest("El id de la URL no coincide con el id del cuerpo.");
+            if (dto == null)
+                return BadRequest(ApiResponse<object>.Fail("El cuerpo de la petición es obligatorio", "INVALID_BODY"));
 
             var almacenDb = await _context.Almacenes
                 .FirstOrDefaultAsync(a => a.id == id);
 
             if (almacenDb == null)
-                return NotFound($"Almacen con id {id} no encontrado.");
+                return NotFound(ApiResponse<object>.Fail($"Almacén con id {id} no encontrado", "ALMACEN_NOT_FOUND"));
 
-
-            almacenDb.nombre = almacen.nombre;
-            almacenDb.nombreencargado = almacen.nombreencargado;
-            almacenDb.Ubicacion = almacen.Ubicacion;
-            almacenDb.Descripcion = almacen.Descripcion;
+            almacenDb.nombre = dto.Nombre;
+            almacenDb.nombreencargado = dto.NombreEncargado;
+            almacenDb.Ubicacion = dto.Ubicacion;
+            almacenDb.Descripcion = dto.Descripcion;
 
             await _context.SaveChangesAsync();
 
-            return Ok();
+            return Ok(ApiResponse<object>.Ok("Almacén actualizado correctamente"));
         }
 
 
