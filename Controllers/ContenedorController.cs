@@ -1,8 +1,10 @@
+
+using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ImportadoraApi.Models;
-using Microsoft.AspNetCore.Http.Connections;
-using Microsoft.AspNetCore.Authorization;
+
 namespace ImportadoraApi.Controllers
 {
     [Authorize]
@@ -17,118 +19,135 @@ namespace ImportadoraApi.Controllers
             _context = context;
         }
 
-        // 🔹 GET: api/contenedor
+        // =========================
+        // GET: api/contenedor
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Contenedor>>> GetContenedores()
+        public async Task<IActionResult> GetContenedores()
         {
-            return await _context.Contenedores
+            var contenedores = await _context.Contenedores
                 .OrderByDescending(c => c.FechaArribo)
+                .Select(c => new ContenedorResponseDto
+                {
+                    Id = c.Id,
+                    Codigo = c.Codigo,
+                    NombreContenedor = c.NombreContenedor,
+                    FechaArribo = c.FechaArribo,
+                    Estado = c.Estado
+
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<ContenedorResponseDto>>.Ok(contenedores));
         }
 
-        // 🔹 GET: api/contenedor/{id}
+        // =========================
+        // GET: api/contenedor/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<Contenedor>> GetContenedor(Guid id)
+        public async Task<IActionResult> GetContenedor(Guid id)
         {
             var contenedor = await _context.Contenedores
-                .FirstOrDefaultAsync(c => c.Id == id);
+                .Where(c => c.Id == id)
+                .Select(c => new ContenedorResponseDto
+                {
+                    Id = c.Id,
+                    Codigo = c.Codigo,
+                    NombreContenedor = c.NombreContenedor,
+                    FechaArribo = c.FechaArribo,
+                    Estado = c.Estado
+                })
+                .FirstOrDefaultAsync();
 
             if (contenedor == null)
-                return NotFound("Contenedor no encontrado");
+                return NotFound(ApiResponse<string>.Fail("Contenedor no encontrado"));
 
-            return Ok(contenedor);
+            return Ok(ApiResponse<ContenedorResponseDto>.Ok(contenedor));
         }
 
-        // 🔹 POST: api/contenedor
+        // =========================
+        // POST: api/contenedor
+        // =========================
+        [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateContenedor([FromBody] PostContenedor contenedor)
+        public async Task<IActionResult> CreateContenedor([FromBody] PostContenedorDto dto)
         {
-
             if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-
-
-
-
-            if (contenedor == null)
-                return BadRequest("El contenedor es obligatorio");
+                return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
             var existeCodigo = await _context.Contenedores
-                    .AnyAsync(c => c.Codigo == contenedor.Codigo);
+                .AnyAsync(c => c.Codigo == dto.Codigo);
 
             if (existeCodigo)
-                return Conflict("Ya existe un contenedor con ese código");
+                return Conflict(ApiResponse<string>.Fail("Ya existe un contenedor con ese código"));
 
-            Guid idContenedor = new Guid();
-            Guid idRegistro = new Guid();
-            _context.RegistrosFinancieros.Add(new RegistroFinanciero
+            var idContenedor = Guid.NewGuid();
+
+            var contenedor = new Contenedor
             {
-                Id = idRegistro,
-                Moneda = contenedor.moneda,
-                Monto = contenedor.CostoCompraContenedor,
-                Observaciones = contenedor.Descripcion,
-                ReferenciaTipo = "Compra Contenedor",
-                ReferenciaId = idContenedor,
-                Tipo = TipoRegistroFinanciero.Gasto,
-
-
-            });
-
-            var contenedoroficial = new Contenedor
-            {
-                Codigo = contenedor.Codigo,
                 Id = idContenedor,
-                NombreContenedor = contenedor.NombreContenedor,
-                FechaArribo = contenedor.FechaArribo
-
+                Codigo = dto.Codigo,
+                NombreContenedor = dto.NombreContenedor,
+                FechaArribo = dto.FechaArribo,
+                Estado = EstadoContenedor.EnProceso
             };
 
-            _context.Contenedores.Add(contenedoroficial);
+            _context.Contenedores.Add(contenedor);
+
+            _context.RegistrosFinancieros.Add(new RegistroFinanciero
+            {
+                Id = Guid.NewGuid(),
+                Moneda = dto.Moneda,
+                Monto = dto.CostoCompraContenedor,
+                Observaciones = dto.Descripcion,
+                ReferenciaTipo = "Compra Contenedor",
+                ReferenciaId = idContenedor,
+                Tipo = TipoRegistroFinanciero.Gasto
+            });
+
             await _context.SaveChangesAsync();
 
-            return Ok(contenedoroficial);
+            var response = new ContenedorResponseDto
+            {
+                Id = contenedor.Id,
+                Codigo = contenedor.Codigo,
+                NombreContenedor = contenedor.NombreContenedor,
+                FechaArribo = contenedor.FechaArribo,
+                Estado = contenedor.Estado
+            };
 
-
+            return Ok(ApiResponse<ContenedorResponseDto>.Ok(response, "Contenedor creado correctamente"));
         }
-        // 🔹 PUT: api/contenedor/{id}
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateContenedor(Guid id, [FromBody] Contenedor contenedor)
-        {
-            if (id != contenedor.Id)
-                return BadRequest("El id no coincide");
 
+        // =========================
+        // PUT: api/contenedor/{id}
+        // =========================
+        [Authorize(Roles = "Admin")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateContenedor(Guid id, [FromBody] PostContenedorDto dto)
+        {
             var contenedorDb = await _context.Contenedores
                 .FirstOrDefaultAsync(c => c.Id == id);
 
             if (contenedorDb == null)
-                return NotFound("Contenedor no encontrado");
+                return NotFound(ApiResponse<string>.Fail("Contenedor no encontrado"));
 
-
-            if (contenedorDb.Codigo != contenedor.Codigo)
+            if (contenedorDb.Codigo != dto.Codigo)
             {
-                var Codigo = await _context.Contenedores.FirstOrDefaultAsync(c => c.Id != contenedorDb.Id && c.Codigo == contenedorDb.Codigo);
-                if (Codigo != null)
-                    return BadRequest("Ya existe un contenedor con ese código");
+                var existeCodigo = await _context.Contenedores
+                    .AnyAsync(c => c.Id != id && c.Codigo == dto.Codigo);
 
+                if (existeCodigo)
+                    return Conflict(ApiResponse<string>.Fail("Ya existe un contenedor con ese código"));
             }
-            // 🔹 Solo datos operativos
-            contenedorDb.FechaArribo = contenedor.FechaArribo;
-            contenedorDb.Estado = contenedor.Estado;
-            contenedorDb.NombreContenedor = contenedor.NombreContenedor;
-            contenedorDb.Codigo = contenedor.Codigo;
 
-
+            contenedorDb.Codigo = dto.Codigo;
+            contenedorDb.NombreContenedor = dto.NombreContenedor;
+            contenedorDb.FechaArribo = dto.FechaArribo;
 
             await _context.SaveChangesAsync();
 
-            return Ok();
+            return Ok(ApiResponse<string>.Ok("OK", "Contenedor actualizado correctamente"));
         }
-
-
-
-
-
-
     }
 }

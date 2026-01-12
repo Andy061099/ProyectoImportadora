@@ -1,7 +1,8 @@
+using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ImportadoraApi.Models;
-using Microsoft.AspNetCore.Authorization;
 
 namespace ImportadoraApi.Controllers
 {
@@ -17,48 +18,65 @@ namespace ImportadoraApi.Controllers
             _context = context;
         }
 
-        // 🔹 GET: api/costoscontenedor/contenedor/{contenedorId}
+        // =========================
+        // GET: api/costoscontenedor/contenedor/{contenedorId}
+        // =========================
         [HttpGet("contenedor/{contenedorId}")]
-        public async Task<ActionResult<IEnumerable<CostosContenedor>>> GetCostosPorContenedor(Guid contenedorId)
+        public async Task<IActionResult> GetCostosPorContenedor(Guid contenedorId)
         {
-            return await _context.CostosContenedores
-                .Where(c => c.Idcotenedor == contenedorId)
+            var costos = await _context.CostosContenedores
+                .Include(c => c.Contenedor)
+                .Where(c => c.ContenedorId == contenedorId)
+                .Select(c => new CostoContenedorResponseDto
+                {
+                    Id = c.Id,
+                    ContenedorId = c.ContenedorId,
+                    CodigoContenedor = c.Contenedor.Codigo,
+                    Moneda = c.Moneda,
+                    Monto = c.Monto,
+                    Observaciones = c.Observaciones
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<CostoContenedorResponseDto>>.Ok(costos));
         }
 
-        // 🔹 POST: api/costoscontenedor
+        // =========================
+        // POST: api/costoscontenedor
+        // =========================
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateCosto([FromBody] CostoContenedorCreateDto dto)
         {
-            if (dto.Monto <= 0)
-                return BadRequest("El monto debe ser mayor que cero.");
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
             var contenedor = await _context.Contenedores
                 .FirstOrDefaultAsync(c => c.Id == dto.ContenedorId);
 
             if (contenedor == null)
-                return BadRequest("El contenedor no existe.");
+                return BadRequest(ApiResponse<string>.Fail("El contenedor no existe"));
 
             // 1️⃣ Crear costo
             var costo = new CostosContenedor
             {
                 Id = Guid.NewGuid(),
-                Idcotenedor = dto.ContenedorId,
-                Tipo = dto.Tipo,
-                Monto = dto.Monto
+                ContenedorId = dto.ContenedorId,
+                Moneda = dto.Moneda,
+                Monto = dto.Monto,
+                Observaciones = dto.Observaciones
             };
 
             _context.CostosContenedores.Add(costo);
 
-            // 2️⃣ Registro financiero (GASTO)
+            // 2️⃣ Registro financiero
             var registro = new RegistroFinanciero
             {
                 Id = Guid.NewGuid(),
                 Fecha = DateTime.UtcNow,
                 Tipo = TipoRegistroFinanciero.Gasto,
-
                 Monto = dto.Monto,
-                Moneda = dto.Tipo,
+                Moneda = dto.Moneda,
                 Observaciones = dto.Observaciones,
                 ReferenciaTipo = "CostoContenedor",
                 ReferenciaId = costo.Id
@@ -68,10 +86,13 @@ namespace ImportadoraApi.Controllers
 
             await _context.SaveChangesAsync();
 
-            return Ok(costo);
+            return Ok(ApiResponse<string>.Ok("OK", "Costo agregado correctamente"));
         }
 
-        // 🔹 DELETE: api/costoscontenedor/{id}
+        // =========================
+        // DELETE: api/costoscontenedor/{id}
+        // =========================
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCosto(Guid id)
         {
@@ -79,9 +100,9 @@ namespace ImportadoraApi.Controllers
                 .FirstOrDefaultAsync(c => c.Id == id);
 
             if (costo == null)
-                return NotFound("Costo no encontrado.");
+                return NotFound(ApiResponse<string>.Fail("Costo no encontrado"));
 
-            // Eliminar también su registro financiero
+            // eliminar registro financiero
             var registro = await _context.RegistrosFinancieros
                 .FirstOrDefaultAsync(r =>
                     r.ReferenciaTipo == "CostoContenedor" &&
@@ -93,7 +114,7 @@ namespace ImportadoraApi.Controllers
             _context.CostosContenedores.Remove(costo);
             await _context.SaveChangesAsync();
 
-            return Ok();
+            return Ok(ApiResponse<string>.Ok("OK", "Costo eliminado correctamente"));
         }
     }
 }

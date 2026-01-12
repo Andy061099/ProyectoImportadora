@@ -1,7 +1,8 @@
+using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ImportadoraApi.Models;
-using Microsoft.AspNetCore.Authorization;
 
 namespace ImportadoraApi.Controllers
 {
@@ -16,58 +17,117 @@ namespace ImportadoraApi.Controllers
         {
             _context = context;
         }
+
+        // =========================
+        // GET: api/contenedordetalles
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ContenedorDetalle>>> GetDetalles()
+        public async Task<IActionResult> GetDetalles()
         {
-            return await _context.ContenedorDetalles
+            var detalles = await _context.ContenedorDetalles
                 .Include(d => d.Producto)
                 .Include(d => d.Contenedor)
                 .OrderByDescending(d => d.Contenedor.FechaArribo)
+                .Select(d => new ContenedorDetalleResponseDto
+                {
+                    Id = d.Id,
+                    ContenedorId = d.ContenedorId,
+                    CodigoContenedor = d.Contenedor.Codigo,
+                    ProductoId = d.ProductoId,
+                    NombreProducto = d.Producto.Nombre,
+                    CantidadRecibida = d.CantidadRecibida,
+                    CantidadActual = d.Cantidadactual,
+                    Packa = d.Packa,
+                    CantProductosPorPacka = d.Cantproductosxpacka,
+                    CantidadMerma = d.Cantidadmerma,
+                    CostoUnitario = d.CostoUnitario
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<ContenedorDetalleResponseDto>>.Ok(detalles));
         }
 
-
+        // =========================
+        // GET: api/contenedordetalles/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<ContenedorDetalle>> GetDetalle(Guid id)
+        public async Task<IActionResult> GetDetalle(Guid id)
         {
             var detalle = await _context.ContenedorDetalles
                 .Include(d => d.Producto)
                 .Include(d => d.Contenedor)
-                .Include(d => d.Distribuciones)
-                .FirstOrDefaultAsync(d => d.Id == id);
+                .Where(d => d.Id == id)
+                .Select(d => new ContenedorDetalleResponseDto
+                {
+                    Id = d.Id,
+                    ContenedorId = d.ContenedorId,
+                    CodigoContenedor = d.Contenedor.Codigo,
+                    ProductoId = d.ProductoId,
+                    NombreProducto = d.Producto.Nombre,
+                    CantidadRecibida = d.CantidadRecibida,
+                    CantidadActual = d.Cantidadactual,
+                    Packa = d.Packa,
+                    CantProductosPorPacka = d.Cantproductosxpacka,
+                    CantidadMerma = d.Cantidadmerma,
+                    CostoUnitario = d.CostoUnitario
+                })
+                .FirstOrDefaultAsync();
 
             if (detalle == null)
-                return NotFound("Detalle no encontrado.");
+                return NotFound(ApiResponse<string>.Fail("Detalle no encontrado"));
 
-            return Ok(detalle);
+            return Ok(ApiResponse<ContenedorDetalleResponseDto>.Ok(detalle));
         }
 
+        // =========================
+        // GET: api/contenedordetalles/contenedor/{contenedorId}
+        // =========================
         [HttpGet("contenedor/{contenedorId}")]
-        public async Task<ActionResult<IEnumerable<ContenedorDetalle>>>
-            GetDetallesPorContenedor(Guid contenedorId)
+        public async Task<IActionResult> GetDetallesPorContenedor(Guid contenedorId)
         {
-            return await _context.ContenedorDetalles
+            var detalles = await _context.ContenedorDetalles
                 .Include(d => d.Producto)
                 .Where(d => d.ContenedorId == contenedorId)
+                .Select(d => new ContenedorDetalleResponseDto
+                {
+                    Id = d.Id,
+                    ContenedorId = d.ContenedorId,
+                    CodigoContenedor = d.Contenedor.Codigo,
+                    ProductoId = d.ProductoId,
+                    NombreProducto = d.Producto.Nombre,
+                    CantidadRecibida = d.CantidadRecibida,
+                    CantidadActual = d.Cantidadactual,
+                    Packa = d.Packa,
+                    CantProductosPorPacka = d.Cantproductosxpacka,
+                    CantidadMerma = d.Cantidadmerma,
+                    CostoUnitario = d.CostoUnitario
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<ContenedorDetalleResponseDto>>.Ok(detalles));
         }
+
+        // =========================
+        // POST: api/contenedordetalles
+        // =========================
+        [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateDetalle([FromBody] ContenedorDetalle dto)
+        public async Task<IActionResult> CreateDetalle([FromBody] PostContenedorDetalleDto dto)
         {
-            if (dto.CantidadRecibida <= 0)
-                return BadRequest("La cantidad recibida debe ser mayor que cero.");
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
             var contenedor = await _context.Contenedores
                 .FirstOrDefaultAsync(c => c.Id == dto.ContenedorId);
 
             if (contenedor == null)
-                return BadRequest("Contenedor no existe.");
+                return BadRequest(ApiResponse<string>.Fail("El contenedor no existe"));
 
             var producto = await _context.Productos
                 .FirstOrDefaultAsync(p => p.Id == dto.ProductoId);
 
             if (producto == null)
-                return BadRequest("Producto no existe.");
+                return BadRequest(ApiResponse<string>.Fail("El producto no existe"));
 
             var detalle = new ContenedorDetalle
             {
@@ -75,47 +135,46 @@ namespace ImportadoraApi.Controllers
                 ContenedorId = dto.ContenedorId,
                 ProductoId = dto.ProductoId,
                 CantidadRecibida = dto.CantidadRecibida,
-                Cantidadactual = dto.CantidadRecibida, // CLAVE
+                Cantidadactual = dto.CantidadRecibida,
                 Packa = dto.Packa,
-                Cantproductosxpacka = dto.Cantproductosxpacka,
-                Cantidadmerma = dto.Cantidadmerma,
+                Cantproductosxpacka = dto.CantProductosPorPacka,
+                Cantidadmerma = dto.CantidadMerma,
                 CostoUnitario = dto.CostoUnitario
             };
 
             _context.ContenedorDetalles.Add(detalle);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(
-                nameof(GetDetalle),
-                new { id = detalle.Id },
-                detalle
-            );
+            return Ok(ApiResponse<string>.Ok("OK", "Detalle agregado correctamente"));
         }
+
+        // =========================
+        // PUT: api/contenedordetalles/{id}
+        // =========================
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateDetalle(Guid id, [FromBody] ContenedorDetalle dto)
+        public async Task<IActionResult> UpdateDetalle(Guid id, [FromBody] PostContenedorDetalleDto dto)
         {
             var detalle = await _context.ContenedorDetalles
                 .Include(d => d.Distribuciones)
                 .FirstOrDefaultAsync(d => d.Id == id);
 
             if (detalle == null)
-                return NotFound();
+                return NotFound(ApiResponse<string>.Fail("Detalle no encontrado"));
 
             if (detalle.Distribuciones.Any())
-                return BadRequest("No se puede modificar un detalle ya distribuido.");
+                return BadRequest(ApiResponse<string>.Fail("No se puede modificar un detalle ya distribuido"));
 
             detalle.CantidadRecibida = dto.CantidadRecibida;
             detalle.Cantidadactual = dto.CantidadRecibida;
+            detalle.Packa = dto.Packa;
+            detalle.Cantproductosxpacka = dto.CantProductosPorPacka;
+            detalle.Cantidadmerma = dto.CantidadMerma;
             detalle.CostoUnitario = dto.CostoUnitario;
-            detalle.Cantidadmerma = dto.Cantidadmerma;
 
             await _context.SaveChangesAsync();
-            return Ok();
+
+            return Ok(ApiResponse<string>.Ok("OK", "Detalle actualizado correctamente"));
         }
-
-
-
-
-
     }
 }

@@ -1,8 +1,8 @@
+using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ImportadoraApi.Models;
-using Microsoft.AspNetCore.Authorization;
-
 
 namespace ImportadoraApi.Controllers
 {
@@ -18,31 +18,64 @@ namespace ImportadoraApi.Controllers
             _context = context;
         }
 
+        // =========================
         // GET: api/inventario
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Inventario>>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            return await _context.Inventarios
+            var inventarios = await _context.Inventarios
+                .Include(i => i.Almacen)
                 .Include(i => i.Productos)
+                    .ThenInclude(ip => ip.Producto)
+                .Select(i => new InventarioResponseDto
+                {
+                    Id = i.Id,
+                    AlmacenId = i.AlmacenId,
+                    NombreAlmacen = i.Almacen!.nombre,
+                    FechaCreacion = i.FechaCreacion,
+                    Productos = i.Productos.Select(p => new InventarioProductoResponseDto
+                    {
+                        ProductoId = p.ProductoId,
+                        NombreProducto = p.Producto.Nombre,
+                        StockActual = p.StockActual
+                    }).ToList()
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<InventarioResponseDto>>.Ok(inventarios));
         }
 
+        // =========================
         // GET: api/inventario/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<Inventario>> GetById(Guid id)
+        public async Task<IActionResult> GetById(Guid id)
         {
             var inventario = await _context.Inventarios
+                .Include(i => i.Almacen)
                 .Include(i => i.Productos)
-                .FirstOrDefaultAsync(i => i.Id == id);
+                    .ThenInclude(ip => ip.Producto)
+                .Where(i => i.Id == id)
+                .Select(i => new InventarioResponseDto
+                {
+                    Id = i.Id,
+                    AlmacenId = i.AlmacenId,
+                    NombreAlmacen = i.Almacen!.nombre,
+                    FechaCreacion = i.FechaCreacion,
+                    Productos = i.Productos.Select(p => new InventarioProductoResponseDto
+                    {
+                        ProductoId = p.ProductoId,
+                        NombreProducto = p.Producto.Nombre,
+                        StockActual = p.StockActual
+                    }).ToList()
+                })
+                .FirstOrDefaultAsync();
 
             if (inventario == null)
-                return NotFound();
+                return NotFound(ApiResponse<string>.Fail("Inventario no encontrado"));
 
-            return inventario;
+            return Ok(ApiResponse<InventarioResponseDto>.Ok(inventario));
         }
-
-
-
-
     }
 }

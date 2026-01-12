@@ -1,11 +1,9 @@
-
+using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ImportadoraApi.Models;
-using Microsoft.AspNetCore.Authorization;
-
-
-
+using System.Security.Claims;
 
 namespace ImportadoraApi.Controllers
 {
@@ -20,80 +18,110 @@ namespace ImportadoraApi.Controllers
         {
             _context = context;
         }
+
+        // =========================
+        // GET: api/distribucionproducto
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DistribucionProducto>>> GetDistribuciones()
+        public async Task<IActionResult> GetDistribuciones()
         {
-            return await _context.DistribucionProductos
+            var distribuciones = await _context.DistribucionProductos
                 .Include(d => d.Producto)
                 .Include(d => d.Almacen)
                 .OrderByDescending(d => d.Fecha)
+                .Select(d => new DistribucionProductoResponseDto
+                {
+                    Id = d.Id,
+                    ProductoId = d.ProductoId,
+                    NombreProducto = d.Producto.Nombre,
+                    AlmacenId = d.AlmacenId,
+                    NombreAlmacen = d.Almacen.nombre,
+                    Cantidad = d.Cantidad,
+                    Fecha = d.Fecha
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<DistribucionProductoResponseDto>>.Ok(distribuciones));
         }
 
-        // 🔹 GET: api/distribucionproducto/{id}
+        // =========================
+        // GET: api/distribucionproducto/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<DistribucionProducto>> GetDistribucion(Guid id)
+        public async Task<IActionResult> GetDistribucion(Guid id)
         {
             var distribucion = await _context.DistribucionProductos
                 .Include(d => d.Producto)
                 .Include(d => d.Almacen)
-                .FirstOrDefaultAsync(d => d.Id == id);
+                .Where(d => d.Id == id)
+                .Select(d => new DistribucionProductoResponseDto
+                {
+                    Id = d.Id,
+                    ProductoId = d.ProductoId,
+                    NombreProducto = d.Producto.Nombre,
+                    AlmacenId = d.AlmacenId,
+                    NombreAlmacen = d.Almacen.nombre,
+                    Cantidad = d.Cantidad,
+                    Fecha = d.Fecha
+                })
+                .FirstOrDefaultAsync();
 
             if (distribucion == null)
-                return NotFound("Distribución no encontrada.");
+                return NotFound(ApiResponse<string>.Fail("Distribución no encontrada"));
 
-            return Ok(distribucion);
+            return Ok(ApiResponse<DistribucionProductoResponseDto>.Ok(distribucion));
         }
 
-
+        // =========================
+        // POST: api/distribucionproducto
+        // =========================
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CrearDistribucion([FromBody] DistribucionProductoCreateDto dto)
         {
-            if (dto.Cantidad <= 0)
-                return BadRequest("La cantidad debe ser mayor que cero.");
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
-            decimal cantidadDisponible = 0;
-
+            // =========================
+            // 1️⃣ Validar detalle origen
+            // =========================
             var detalle = await _context.ContenedorDetalles
-                 .Include(d => d.Distribuciones)
-                 .FirstOrDefaultAsync(d => d.Id == dto.OrigenId);
+                .Include(d => d.Distribuciones)
+                .FirstOrDefaultAsync(d => d.Id == dto.OrigenId);
 
             if (detalle == null)
-                return BadRequest("Detalle de contenedor no encontrado.");
+                return BadRequest(ApiResponse<string>.Fail("Detalle de contenedor no encontrado"));
 
             if (detalle.ProductoId != dto.ProductoId)
-                return BadRequest("El producto no coincide.");
+                return BadRequest(ApiResponse<string>.Fail("El producto no coincide con el detalle de origen"));
 
             var yaDistribuido = detalle.Distribuciones.Sum(d => d.Cantidad);
-            cantidadDisponible = detalle.CantidadRecibida - yaDistribuido;
+            var disponible = detalle.CantidadRecibida - yaDistribuido;
 
-
-
-            if (dto.Cantidad > cantidadDisponible)
-                return BadRequest("La cantidad supera lo disponible.");
+            if (dto.Cantidad > disponible)
+                return BadRequest(ApiResponse<string>.Fail("La cantidad supera lo disponible en el contenedor"));
 
             // =========================
-            // 2️⃣ CREAR DISTRIBUCIÓN
+            // 2️⃣ Crear distribución
             // =========================
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var distribucion = new DistribucionProducto
             {
                 Id = Guid.NewGuid(),
-
                 OrigenId = dto.OrigenId,
                 ProductoId = dto.ProductoId,
                 AlmacenId = dto.AlmacenId,
                 Cantidad = dto.Cantidad,
                 Fecha = DateTime.UtcNow,
-
+                UsuarioId = Guid.Parse(userId!)
             };
 
             _context.DistribucionProductos.Add(distribucion);
 
             // =========================
-            // 3️⃣ INVENTARIO PRODUCTO
+            // 3️⃣ InventarioProducto
             // =========================
-
             var inventarioProducto = await _context.InventarioProductos
                 .Include(ip => ip.Inventario)
                 .FirstOrDefaultAsync(ip =>
@@ -106,24 +134,22 @@ namespace ImportadoraApi.Controllers
                     .FirstOrDefaultAsync(i => i.AlmacenId == dto.AlmacenId);
 
                 if (inventario == null)
-                    return BadRequest("El almacén no tiene inventario.");
+                    return BadRequest(ApiResponse<string>.Fail("El almacén no tiene inventario creado"));
 
                 inventarioProducto = new InventarioProducto
                 {
                     Id = Guid.NewGuid(),
                     InventarioId = inventario.Id,
                     ProductoId = dto.ProductoId,
-                    StockActual = 0,
-
+                    StockActual = 0
                 };
 
                 _context.InventarioProductos.Add(inventarioProducto);
             }
 
             // =========================
-            // 4️⃣ MOVIMIENTO INVENTARIO
+            // 4️⃣ Movimiento inventario
             // =========================
-
             var stockAnterior = inventarioProducto.StockActual;
             var stockPosterior = stockAnterior + dto.Cantidad;
 
@@ -137,8 +163,7 @@ namespace ImportadoraApi.Controllers
                 StockAnterior = stockAnterior,
                 StockPosterior = stockPosterior,
                 ReferenciaId = dto.OrigenId,
-                // UsuarioId = dto.OrigenId,
-                Observaciones = "Distribución de producto a almacén"
+                Observaciones = "Distribución desde contenedor a almacén"
             };
 
             inventarioProducto.StockActual = stockPosterior;
@@ -146,13 +171,11 @@ namespace ImportadoraApi.Controllers
             _context.MovimientosInventario.Add(movimiento);
 
             // =========================
-            // 5️⃣ GUARDAR TODO
+            // 5️⃣ Guardar todo
             // =========================
-
             await _context.SaveChangesAsync();
 
-            return Ok(distribucion);
+            return Ok(ApiResponse<string>.Ok("OK", "Distribución realizada correctamente"));
         }
-
     }
 }
