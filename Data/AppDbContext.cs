@@ -114,8 +114,8 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Contenedor>()
         .HasMany(p => p.Costos)
-        .WithOne(p => p.contenedorasignado)
-        .HasForeignKey(d => d.Idcotenedor).OnDelete(DeleteBehavior.Cascade);
+        .WithOne(p => p.Contenedor)
+        .HasForeignKey(d => d.ContenedorId).OnDelete(DeleteBehavior.Cascade);
 
 
 
