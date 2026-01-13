@@ -101,16 +101,17 @@ namespace ImportadoraApi.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Idcotenedor = table.Column<Guid>(type: "uuid", nullable: false),
-                    Tipo = table.Column<int>(type: "integer", nullable: false),
-                    Monto = table.Column<decimal>(type: "numeric", nullable: false)
+                    ContenedorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Moneda = table.Column<int>(type: "integer", nullable: false),
+                    Monto = table.Column<decimal>(type: "numeric", nullable: false),
+                    Observaciones = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_CostosContenedores", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_CostosContenedores_Contenedores_Idcotenedor",
-                        column: x => x.Idcotenedor,
+                        name: "FK_CostosContenedores_Contenedores_ContenedorId",
+                        column: x => x.ContenedorId,
                         principalTable: "Contenedores",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -540,9 +541,9 @@ namespace ImportadoraApi.Migrations
                 column: "ProductoId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CostosContenedores_Idcotenedor",
+                name: "IX_CostosContenedores_ContenedorId",
                 table: "CostosContenedores",
-                column: "Idcotenedor");
+                column: "ContenedorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DistribucionProductos_AlmacenId",

@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ImportadoraApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260112005106_Inicial")]
+    [Migration("20260113020505_Inicial")]
     partial class Inicial
     {
         /// <inheritdoc />
@@ -239,18 +239,21 @@ namespace ImportadoraApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("Idcotenedor")
+                    b.Property<Guid>("ContenedorId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Moneda")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("Monto")
                         .HasColumnType("numeric");
 
-                    b.Property<int>("Tipo")
-                        .HasColumnType("integer");
+                    b.Property<string>("Observaciones")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Idcotenedor");
+                    b.HasIndex("ContenedorId");
 
                     b.ToTable("CostosContenedores");
                 });
@@ -720,13 +723,13 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.CostosContenedor", b =>
                 {
-                    b.HasOne("ImportadoraApi.Models.Contenedor", "contenedorasignado")
+                    b.HasOne("ImportadoraApi.Models.Contenedor", "Contenedor")
                         .WithMany("Costos")
-                        .HasForeignKey("Idcotenedor")
+                        .HasForeignKey("ContenedorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("contenedorasignado");
+                    b.Navigation("Contenedor");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.DistribucionProducto", b =>
