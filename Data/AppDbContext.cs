@@ -24,6 +24,8 @@ public class AppDbContext : DbContext
     public DbSet<DistribucionProducto> DistribucionProductos { get; set; } = null!;
     public DbSet<CostosContenedor> CostosContenedores { get; set; } = null!;
 
+    public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
+
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -74,6 +76,13 @@ public class AppDbContext : DbContext
             .HasMany(c => c.Movimientos)
             .WithOne(cm => cm.Consignacion)
             .HasForeignKey(cm => cm.ConsignacionId).OnDelete(DeleteBehavior.Cascade);
+
+
+        modelBuilder.Entity<Usuario>()
+            .HasMany(u => u.RefreshTokens)
+            .WithOne(rt => rt.Usuario)
+            .HasForeignKey(rt => rt.UsuarioId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Usuario - movimientos, ventas, registros financieros
         modelBuilder.Entity<Usuario>()

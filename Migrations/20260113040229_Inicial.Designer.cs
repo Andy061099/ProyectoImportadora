@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ImportadoraApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260113020505_Inicial")]
+    [Migration("20260113040229_Inicial")]
     partial class Inicial
     {
         /// <inheritdoc />
@@ -487,6 +487,32 @@ namespace ImportadoraApi.Migrations
                     b.ToTable("Productos");
                 });
 
+            modelBuilder.Entity("ImportadoraApi.Models.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Expira")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Revocado")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("RefreshTokens");
+                });
+
             modelBuilder.Entity("ImportadoraApi.Models.RegistroFinanciero", b =>
                 {
                     b.Property<Guid>("Id")
@@ -838,6 +864,17 @@ namespace ImportadoraApi.Migrations
                         .HasForeignKey("VentaDetalleId");
                 });
 
+            modelBuilder.Entity("ImportadoraApi.Models.RefreshToken", b =>
+                {
+                    b.HasOne("ImportadoraApi.Models.Usuario", "Usuario")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("ImportadoraApi.Models.RegistroFinanciero", b =>
                 {
                     b.HasOne("ImportadoraApi.Models.Almacen", "Almacen")
@@ -943,6 +980,8 @@ namespace ImportadoraApi.Migrations
                     b.Navigation("Mermas");
 
                     b.Navigation("Movimientos");
+
+                    b.Navigation("RefreshTokens");
 
                     b.Navigation("RegistrosFinancieros");
 

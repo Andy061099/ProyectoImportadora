@@ -1,5 +1,6 @@
 using ImportadoraApi.DTOs.Auth;
 using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
 using ImportadoraApi.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,31 +34,44 @@ namespace ImportadoraApi.Controllers
             var user = await _context.Usuarios
                 .FirstOrDefaultAsync(u => u.Email == dto.Email && u.Activo);
 
-            if (user == null)
-                return Unauthorized("Credenciales incorrectas");
-
-            if (!PasswordHelper.Verify(dto.Password, user.PasswordHash))
-                return Unauthorized("Credenciales incorrectas");
-
-            var token = GenerateToken(user);
-
-            return Ok(new
+            if (user == null || !PasswordHelper.Verify(dto.Password, user.PasswordHash))
             {
-                success = true,
-                message = "Login exitoso",
-                data = new
-                {
-                    token,
-                    user.Id,
-                    user.Nombre,
-                    user.Email,
-                    user.Rol
-                }
-            });
+                return Ok(ApiResponse<object>.Fail(
+                    "Credenciales incorrectas",
+                    "AUTH_INVALID_CREDENTIALS"
+                ));
+            }
+
+            var accessToken = GenerateToken(user);
+            var refreshToken = GenerateRefreshToken();
+
+            var refresh = new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UsuarioId = user.Id,
+                Token = refreshToken,
+                Expira = DateTime.UtcNow.AddDays(7),
+                Revocado = false
+            };
+
+            _context.RefreshTokens.Add(refresh);
+            await _context.SaveChangesAsync();
+
+            var data = new
+            {
+                accessToken,
+                refreshToken,
+                user.Id,
+                user.Nombre,
+                user.Email,
+                user.Rol
+            };
+
+            return Ok(ApiResponse<object>.Ok(data, "Login exitoso"));
         }
 
         // =========================
-        // CAMBIO DE CONTRASEÑA
+        // CHANGE PASSWORD
         // =========================
         [Authorize]
         [HttpPost("change-password")]
@@ -68,46 +82,108 @@ namespace ImportadoraApi.Controllers
             var user = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id.ToString() == userId);
 
             if (user == null)
-                return Unauthorized();
+                return Ok(ApiResponse<string>.Fail("Usuario no autorizado", "AUTH_UNAUTHORIZED"));
 
             if (!PasswordHelper.Verify(dto.PasswordActual, user.PasswordHash))
-                return BadRequest("La contraseña actual es incorrecta");
+                return Ok(ApiResponse<string>.Fail("La contraseña actual es incorrecta", "AUTH_INVALID_PASSWORD"));
 
             user.PasswordHash = PasswordHelper.Hash(dto.PasswordNueva);
-
             await _context.SaveChangesAsync();
 
-            return Ok(new
-            {
-                success = true,
-                message = "Contraseña actualizada correctamente"
-            });
+            return Ok(ApiResponse<string>.Ok("OK", "Contraseña actualizada correctamente"));
         }
 
         // =========================
-        // RECUPERAR CONTRASEÑA (BÁSICO)
+        // RECOVER PASSWORD
         // =========================
         [HttpPost("recover-password")]
         public async Task<IActionResult> RecoverPassword([FromBody] RecoverPasswordDto dto)
         {
-            var user = await _context.Usuarios.FirstOrDefaultAsync(u => u.Email == dto.Email && u.Activo);
+            var user = await _context.Usuarios
+                .FirstOrDefaultAsync(u => u.Email == dto.Email && u.Activo);
 
             if (user == null)
-                return Ok(new { success = true, message = "Si el correo existe, se enviará recuperación" });
+            {
+                return Ok(ApiResponse<string>.Ok(
+                    "OK",
+                    "Si el correo existe, se enviará recuperación"
+                ));
+            }
 
-            // 🔴 Aquí luego puedes integrar email real
-            user.PasswordHash = PasswordHelper.Hash("123456");
+            user.PasswordHash = PasswordHelper.Hash("123456"); // simulación
             await _context.SaveChangesAsync();
 
-            return Ok(new
-            {
-                success = true,
-                message = "Contraseña reiniciada. Revisa tu correo (simulado: 123456)"
-            });
+            return Ok(ApiResponse<string>.Ok(
+                "OK",
+                "Contraseña reiniciada. Revisa tu correo (simulado: 123456)"
+            ));
         }
 
         // =========================
-        // TOKEN
+        // REFRESH TOKEN
+        // =========================
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenDto dto)
+        {
+            var refresh = await _context.RefreshTokens
+                .Include(r => r.Usuario)
+                .FirstOrDefaultAsync(r => r.Token == dto.RefreshToken);
+
+            if (refresh == null || refresh.Revocado || refresh.Expira < DateTime.UtcNow)
+            {
+                return Ok(ApiResponse<string>.Fail(
+                    "Refresh token inválido o expirado",
+                    "AUTH_REFRESH_INVALID"
+                ));
+            }
+
+            var user = refresh.Usuario;
+
+            var newAccessToken = GenerateToken(user);
+            var newRefreshToken = GenerateRefreshToken();
+
+            refresh.Revocado = true;
+
+            var newRefresh = new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UsuarioId = user.Id,
+                Token = newRefreshToken,
+                Expira = DateTime.UtcNow.AddDays(7),
+                Revocado = false
+            };
+
+            _context.RefreshTokens.Add(newRefresh);
+            await _context.SaveChangesAsync();
+
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                accessToken = newAccessToken,
+                refreshToken = newRefreshToken
+            }, "Token renovado"));
+        }
+
+        // =========================
+        // LOGOUT
+        // =========================
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout([FromBody] RefreshTokenDto dto)
+        {
+            var refresh = await _context.RefreshTokens
+                .FirstOrDefaultAsync(r => r.Token == dto.RefreshToken);
+
+            if (refresh != null)
+            {
+                refresh.Revocado = true;
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(ApiResponse<string>.Ok("OK", "Sesión cerrada correctamente"));
+        }
+
+        // =========================
+        // TOKEN HELPERS
         // =========================
         private string GenerateToken(Usuario user)
         {
@@ -132,6 +208,14 @@ namespace ImportadoraApi.Controllers
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private string GenerateRefreshToken()
+        {
+            var randomBytes = new byte[64];
+            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+            rng.GetBytes(randomBytes);
+            return Convert.ToBase64String(randomBytes);
         }
     }
 }

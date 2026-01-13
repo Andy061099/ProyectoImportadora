@@ -214,6 +214,27 @@ namespace ImportadoraApi.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "RefreshTokens",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UsuarioId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Token = table.Column<string>(type: "text", nullable: false),
+                    Expira = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Revocado = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RefreshTokens", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RefreshTokens_Usuarios_UsuarioId",
+                        column: x => x.UsuarioId,
+                        principalTable: "Usuarios",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RegistrosFinancieros",
                 columns: table => new
                 {
@@ -607,6 +628,11 @@ namespace ImportadoraApi.Migrations
                 column: "VentaDetalleId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_RefreshTokens_UsuarioId",
+                table: "RefreshTokens",
+                column: "UsuarioId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RegistrosFinancieros_AlmacenId",
                 table: "RegistrosFinancieros",
                 column: "AlmacenId");
@@ -660,6 +686,9 @@ namespace ImportadoraApi.Migrations
 
             migrationBuilder.DropTable(
                 name: "Pagos");
+
+            migrationBuilder.DropTable(
+                name: "RefreshTokens");
 
             migrationBuilder.DropTable(
                 name: "CierresDiarios");

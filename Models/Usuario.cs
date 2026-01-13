@@ -15,6 +15,8 @@ namespace ImportadoraApi.Models
 
         public ICollection<Merma> Mermas { get; set; } = new List<Merma>();
 
+        public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
         public ICollection<RegistroFinanciero> RegistrosFinancieros { get; set; } = new List<RegistroFinanciero>();
         public ICollection<ConsignacionMovimiento> Consignaciones { get; set; } = new List<ConsignacionMovimiento>();
     }
