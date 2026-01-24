@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ImportadoraApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260113040229_Inicial")]
+    [Migration("20260124162442_Inicial")]
     partial class Inicial
     {
         /// <inheritdoc />
@@ -115,9 +115,8 @@ namespace ImportadoraApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Estado")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("Estado")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("MontoPendiente")
                         .HasColumnType("numeric");
@@ -185,9 +184,6 @@ namespace ImportadoraApi.Migrations
                     b.Property<string>("NombreContenedor")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<decimal>("PorcentajeVendido")
-                        .HasColumnType("numeric");
 
                     b.HasKey("Id");
 
@@ -429,20 +425,20 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.Pagos", b =>
                 {
-                    b.Property<Guid>("id")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("VentaDetalleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("cantidad")
+                    b.Property<decimal>("Cantidad")
                         .HasColumnType("numeric");
 
-                    b.Property<int>("tipoMoneda")
+                    b.Property<int>("TipoMoneda")
                         .HasColumnType("integer");
 
-                    b.HasKey("id");
+                    b.Property<Guid>("VentaDetalleId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
 
                     b.HasIndex("VentaDetalleId");
 
@@ -525,7 +521,7 @@ namespace ImportadoraApi.Migrations
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("Moneda")
+                    b.Property<int>("MonedaDeclarada")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Monto")
@@ -601,12 +597,14 @@ namespace ImportadoraApi.Migrations
                     b.Property<Guid?>("Consignacionid")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Estado")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("Estado")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MonedaDeclarada")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TipoVenta")
                         .HasColumnType("integer");
@@ -859,9 +857,13 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.Pagos", b =>
                 {
-                    b.HasOne("ImportadoraApi.Models.VentaDetalle", null)
-                        .WithMany("monedas")
-                        .HasForeignKey("VentaDetalleId");
+                    b.HasOne("ImportadoraApi.Models.VentaDetalle", "VentaDetalle")
+                        .WithMany("Pagos")
+                        .HasForeignKey("VentaDetalleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("VentaDetalle");
                 });
 
             modelBuilder.Entity("ImportadoraApi.Models.RefreshToken", b =>
@@ -997,7 +999,7 @@ namespace ImportadoraApi.Migrations
 
             modelBuilder.Entity("ImportadoraApi.Models.VentaDetalle", b =>
                 {
-                    b.Navigation("monedas");
+                    b.Navigation("Pagos");
                 });
 #pragma warning restore 612, 618
         }

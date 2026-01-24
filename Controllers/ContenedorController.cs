@@ -97,7 +97,7 @@ namespace ImportadoraApi.Controllers
             _context.RegistrosFinancieros.Add(new RegistroFinanciero
             {
                 Id = Guid.NewGuid(),
-                Moneda = dto.Moneda,
+                MonedaDeclarada = dto.Moneda,
                 Monto = dto.CostoCompraContenedor,
                 Observaciones = dto.Descripcion,
                 ReferenciaTipo = "Compra Contenedor",

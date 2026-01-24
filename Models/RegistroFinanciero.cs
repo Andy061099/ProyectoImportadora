@@ -18,7 +18,7 @@ namespace ImportadoraApi.Models
 
         public string ReferenciaTipo { get; set; } = null!;
 
-        public TipoMoneda Moneda { get; set; }
+        public TipoMoneda MonedaDeclarada { get; set; }
 
         public Guid? ReferenciaId { get; set; }
 

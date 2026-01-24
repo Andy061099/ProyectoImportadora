@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
+using ImportadoraApi.Responses;
 using Microsoft.AspNetCore.Authorization;
+
 namespace ImportadoraApi.Controllers
 {
     [Authorize]
@@ -15,106 +17,218 @@ namespace ImportadoraApi.Controllers
         {
             _context = context;
         }
+
+        // =========================
+        // GET: api/venta
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Venta>>> GetVenta()
+        public async Task<ActionResult<ApiResponse<IEnumerable<VentaResponseDto>>>> GetVentas()
         {
-            var Venta = await _context.Ventas
+            var ventas = await _context.Ventas
                 .AsNoTracking()
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.Pagos)
                 .ToListAsync();
 
-            return Ok(Venta);
+            var response = ventas.Select(v => new VentaResponseDto
+            {
+                Id = v.Id,
+                Fecha = v.Fecha,
+                TipoVenta = v.TipoVenta,
+                AlmacenId = v.AlmacenId,
+                Cliente = v.Cliente,
+                Total = v.Total,
+                TotalPagado = v.TotalPagado,
+                Usuario = v.UsuarioId,
+                Estado = v.Estado, // <-- ahora es enum
+                MonedaDeclarada = v.MonedaDeclarada,
+                Detalles = v.Detalles.Select(d => new VentaDetalleResponseDto
+                {
+                    Id = d.Id,
+                    InventarioProductoId = d.InventarioProductoId,
+                    Cantidad = d.Cantidad,
+                    PrecioUnitario = d.PrecioUnitario,
+                    Subtotal = d.Subtotal,
+                    Impuestos = d.Impuestos,
+                    Pagos = d.Pagos.Select(p => new PagoResponseDto
+                    {
+                        TipoMoneda = p.TipoMoneda,
+                        Cantidad = p.Cantidad
+                    }).ToList()
+                }).ToList()
+            }).ToList();
+
+            return Ok(ApiResponse<IEnumerable<VentaResponseDto>>.Ok(
+                response,
+                "Ventas obtenidas correctamente"
+            ));
         }
 
-        // GET: api/Venta/{id}
+        // =========================
+        // GET: api/venta/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<Venta>> GetVentaById(Guid id)
+        public async Task<ActionResult<ApiResponse<VentaResponseDto>>> GetVentaById(Guid id)
         {
-            var Venta = await _context.Ventas
+            var venta = await _context.Ventas
                 .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == id);
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.Pagos)
+                .FirstOrDefaultAsync(v => v.Id == id);
 
-            if (Venta == null)
-                return NotFound($"Producto con id {id} no encontrado");
+            if (venta == null)
+                return NotFound(ApiResponse<VentaResponseDto>.Fail(
+                    $"Venta con id {id} no encontrada",
+                    "VENTA_NOT_FOUND"
+                ));
 
-            return Ok(Venta);
+            var ventaDto = new VentaResponseDto
+            {
+                Id = venta.Id,
+                Fecha = venta.Fecha,
+                TipoVenta = venta.TipoVenta,
+                AlmacenId = venta.AlmacenId,
+                Cliente = venta.Cliente,
+                Usuario = venta.UsuarioId,
+                Total = venta.Total,
+                TotalPagado = venta.TotalPagado,
+                Estado = venta.Estado, // <-- enum
+                MonedaDeclarada = venta.MonedaDeclarada,
+                Detalles = venta.Detalles.Select(d => new VentaDetalleResponseDto
+                {
+                    InventarioProductoId = d.InventarioProductoId,
+                    Cantidad = d.Cantidad,
+                    PrecioUnitario = d.PrecioUnitario,
+                    Subtotal = d.Subtotal,
+                    Impuestos = d.Impuestos,
+                    Pagos = d.Pagos.Select(p => new PagoResponseDto
+                    {
+                        Cantidad = p.Cantidad,
+                        TipoMoneda = p.TipoMoneda
+                    }).ToList()
+                }).ToList()
+            };
+
+            return Ok(ApiResponse<VentaResponseDto>.Ok(
+                ventaDto,
+                "Venta obtenida correctamente"
+            ));
         }
 
+        // =========================
+        // POST: api/venta
+        // =========================
         [HttpPost]
-        public async Task<IActionResult> PostVenta([FromBody] VentaCreateDto dto)
+        public async Task<ActionResult<ApiResponse<object>>> PostVenta([FromBody] VentaCreateDto dto)
         {
+            if (dto == null)
+                return BadRequest(ApiResponse<object>.Fail(
+                    "El cuerpo de la venta es obligatorio",
+                    "INVALID_BODY"
+                ));
+
             if (dto.Detalles == null || !dto.Detalles.Any())
-                return BadRequest("La venta debe tener al menos un producto.");
+                return BadRequest(ApiResponse<object>.Fail(
+                    "La venta debe tener al menos un producto",
+                    "EMPTY_DETAILS"
+                ));
 
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // =========================
-                // 1️⃣ CALCULAR TOTAL REAL
-                // =========================
-                decimal total = 0;
+                decimal totalVenta = 0;
 
-                foreach (var d in dto.Detalles)
-                {
-                    if (d.Cantidad <= 0)
-                        return BadRequest("Cantidad inválida.");
-
-                    if (d.PrecioUnitario <= 0)
-                        return BadRequest("Precio inválido.");
-
-                    total += d.Cantidad * d.PrecioUnitario;
-                }
-
-                if (dto.TotalPagado < 0 || dto.TotalPagado > total)
-                    return BadRequest("Total pagado inválido.");
-
-                // =========================
-                // 2️⃣ CREAR VENTA
-                // =========================
                 var venta = new Venta
                 {
                     Id = Guid.NewGuid(),
                     Fecha = DateTime.UtcNow,
-                    TipoVenta = dto.TipoVenta, // Mayorista / Minorista
+                    TipoVenta = dto.TipoVenta,
                     AlmacenId = dto.AlmacenId,
                     Cliente = dto.Cliente,
-                    Total = total,
-                    TotalPagado = dto.TotalPagado,
                     UsuarioId = dto.UsuarioId,
-                    Estado = dto.TotalPagado < total ? "PENDIENTE" : "PAGADA"
+                    MonedaDeclarada = dto.MonedaDeclarada
                 };
 
                 _context.Ventas.Add(venta);
 
-                // =========================
-                // 3️⃣ PROCESAR DETALLES + INVENTARIO
-                // =========================
                 foreach (var d in dto.Detalles)
                 {
+                    if (d.Cantidad <= 0)
+                        return BadRequest(ApiResponse<object>.Fail(
+                            "Cantidad inválida",
+                            "INVALID_QUANTITY"
+                        ));
+
+                    if (d.PrecioUnitario <= 0)
+                        return BadRequest(ApiResponse<object>.Fail(
+                            "Precio unitario inválido",
+                            "INVALID_PRICE"
+                        ));
+
                     var inventarioProducto = await _context.InventarioProductos
                         .FirstOrDefaultAsync(ip => ip.Id == d.InventarioProductoId);
 
                     if (inventarioProducto == null)
-                        return BadRequest("Producto no encontrado en inventario.");
+                        return BadRequest(ApiResponse<object>.Fail(
+                            "Producto no encontrado en inventario",
+                            "INVENTORY_PRODUCT_NOT_FOUND"
+                        ));
 
                     if (inventarioProducto.StockActual < d.Cantidad)
-                        return BadRequest("Stock insuficiente.");
+                        return BadRequest(ApiResponse<object>.Fail(
+                            "Stock insuficiente",
+                            "INSUFFICIENT_STOCK"
+                        ));
 
-                    var stockAnterior = inventarioProducto.StockActual;
-                    var stockPosterior = stockAnterior - d.Cantidad;
+                    var subtotal = d.Cantidad * d.PrecioUnitario;
+                    var totalDetalle = subtotal + d.Impuestos;
+                    totalVenta += totalDetalle;
 
                     var detalle = new VentaDetalle
                     {
                         Id = Guid.NewGuid(),
                         VentaId = venta.Id,
-                        InventarioProductoId = d.InventarioProductoId,
+                        InventarioProductoId = inventarioProducto.Id,
                         Cantidad = d.Cantidad,
                         PrecioUnitario = d.PrecioUnitario,
-                        Subtotal = d.Cantidad * d.PrecioUnitario,
-                        Impuestos = 0
+                        Subtotal = subtotal,
+                        Impuestos = d.Impuestos
                     };
 
                     _context.VentaDetalles.Add(detalle);
+
+                    // PAGOS POR MONEDA
+                    if (d.Pagos == null || !d.Pagos.Any())
+                        return BadRequest(ApiResponse<object>.Fail(
+                            "Cada detalle debe tener al menos un pago",
+                            "PAYMENTS_REQUIRED"
+                        ));
+
+                    foreach (var p in d.Pagos)
+                    {
+                        if (p.Cantidad <= 0)
+                            return BadRequest(ApiResponse<object>.Fail(
+                                "Cantidad de pago inválida",
+                                "INVALID_PAYMENT"
+                            ));
+
+                        var pago = new Pagos
+                        {
+                            Id = Guid.NewGuid(),
+                            VentaDetalleId = detalle.Id,
+                            Cantidad = p.Cantidad,
+                            TipoMoneda = p.TipoMoneda
+                        };
+
+                        _context.Pagos.Add(pago);
+                    }
+
+                    // MOVIMIENTO DE INVENTARIO
+                    var stockAnterior = inventarioProducto.StockActual;
+                    var stockPosterior = stockAnterior - d.Cantidad;
+
+                    inventarioProducto.StockActual = stockPosterior;
 
                     var movimiento = new MovimientoInventario
                     {
@@ -126,64 +240,65 @@ namespace ImportadoraApi.Controllers
                         StockAnterior = stockAnterior,
                         StockPosterior = stockPosterior,
                         ReferenciaId = venta.Id,
-                        Observaciones = "Venta"
+                        Observaciones = "Venta",
+                        OrSigen = Origen.Venta,
+                        UsuarioId = venta.UsuarioId
                     };
 
                     _context.MovimientosInventario.Add(movimiento);
-
-                    inventarioProducto.StockActual = stockPosterior;
                 }
 
-                // =========================
-                // 4️⃣ CREAR CONSIGNACIÓN SI HAY DEUDA
-                // =========================
+                // TOTALES DE VENTA
+                venta.Total = totalVenta;
+                venta.TotalPagado = dto.TotalPagado;
+                venta.Estado = dto.TotalPagado < totalVenta ? EstadoVenta.Pagada : EstadoVenta.Pagada;
+
+                // CONSIGNACIÓN (SI APLICA)
                 if (venta.TotalPagado < venta.Total)
                 {
-                    var pendiente = venta.Total - venta.TotalPagado;
-
                     var consignacion = new Consignacion
                     {
                         Id = Guid.NewGuid(),
                         VentaId = venta.Id,
                         MontoTotal = venta.Total,
-                        MontoPendiente = pendiente,
-                        Estado = "ABIERTA"
+                        MontoPendiente = venta.Total - venta.TotalPagado,
+                        Estado = EstadoConsigacion.ABIERTA
                     };
-
                     _context.Consignaciones.Add(consignacion);
-
-                    // Si pagó algo, registrar movimiento
-                    if (venta.TotalPagado > 0)
-                    {
-                        var mov = new ConsignacionMovimiento
-                        {
-                            Id = Guid.NewGuid(),
-                            ConsignacionId = consignacion.Id,
-                            Fecha = DateTime.UtcNow,
-                            Monto = venta.TotalPagado,
-                            Observaciones = "Pago inicial",
-                            UsuarioId = venta.UsuarioId
-                        };
-
-                        _context.ConsignacionMovimientos.Add(mov);
-                    }
                 }
+
+                // REGISTRO FINANCIERO
+                var registroFinanciero = new RegistroFinanciero
+                {
+                    Id = Guid.NewGuid(),
+                    Fecha = DateTime.UtcNow,
+                    Tipo = TipoRegistroFinanciero.Ingreso,
+                    AlmacenId = venta.AlmacenId,
+                    Monto = venta.TotalPagado,
+                    ReferenciaTipo = "Venta",
+                    ReferenciaId = venta.Id,
+                    MonedaDeclarada = venta.MonedaDeclarada,
+                    UsuarioId = venta.UsuarioId,
+                    Observaciones = "Registro automático por venta"
+                };
+                _context.RegistrosFinancieros.Add(registroFinanciero);
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Ok(venta);
+                return Ok(ApiResponse<object>.Ok(
+                    new { venta.Id },
+                    "Venta registrada correctamente"
+                ));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, ex.Message);
+                return StatusCode(500, ApiResponse<object>.Fail(
+                    "Error interno al registrar la venta",
+                    "INTERNAL_ERROR"
+                ));
             }
         }
-
-
-
-
-
     }
 }

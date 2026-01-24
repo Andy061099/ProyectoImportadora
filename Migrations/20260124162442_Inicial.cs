@@ -34,7 +34,6 @@ namespace ImportadoraApi.Migrations
                     Codigo = table.Column<string>(type: "text", nullable: false),
                     FechaArribo = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     NombreContenedor = table.Column<string>(type: "text", nullable: false),
-                    PorcentajeVendido = table.Column<decimal>(type: "numeric", nullable: false),
                     Estado = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
@@ -244,7 +243,7 @@ namespace ImportadoraApi.Migrations
                     AlmacenId = table.Column<Guid>(type: "uuid", nullable: true),
                     Monto = table.Column<decimal>(type: "numeric", nullable: false),
                     ReferenciaTipo = table.Column<string>(type: "text", nullable: false),
-                    Moneda = table.Column<int>(type: "integer", nullable: false),
+                    MonedaDeclarada = table.Column<int>(type: "integer", nullable: false),
                     ReferenciaId = table.Column<Guid>(type: "uuid", nullable: true),
                     Observaciones = table.Column<string>(type: "text", nullable: true),
                     UsuarioId = table.Column<Guid>(type: "uuid", nullable: false)
@@ -274,9 +273,10 @@ namespace ImportadoraApi.Migrations
                     TipoVenta = table.Column<int>(type: "integer", nullable: false),
                     AlmacenId = table.Column<Guid>(type: "uuid", nullable: false),
                     Cliente = table.Column<string>(type: "text", nullable: true),
+                    MonedaDeclarada = table.Column<int>(type: "integer", nullable: false),
                     Total = table.Column<decimal>(type: "numeric", nullable: false),
                     TotalPagado = table.Column<decimal>(type: "numeric", nullable: false),
-                    Estado = table.Column<string>(type: "text", nullable: false),
+                    Estado = table.Column<int>(type: "integer", nullable: false),
                     Consignacionid = table.Column<Guid>(type: "uuid", nullable: true),
                     UsuarioId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
@@ -393,7 +393,7 @@ namespace ImportadoraApi.Migrations
                     VentaId = table.Column<Guid>(type: "uuid", nullable: false),
                     MontoTotal = table.Column<decimal>(type: "numeric", nullable: false),
                     MontoPendiente = table.Column<decimal>(type: "numeric", nullable: false),
-                    Estado = table.Column<string>(type: "text", nullable: false)
+                    Estado = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -500,19 +500,20 @@ namespace ImportadoraApi.Migrations
                 name: "Pagos",
                 columns: table => new
                 {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    cantidad = table.Column<decimal>(type: "numeric", nullable: false),
-                    tipoMoneda = table.Column<int>(type: "integer", nullable: false),
-                    VentaDetalleId = table.Column<Guid>(type: "uuid", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VentaDetalleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Cantidad = table.Column<decimal>(type: "numeric", nullable: false),
+                    TipoMoneda = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Pagos", x => x.id);
+                    table.PrimaryKey("PK_Pagos", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Pagos_VentaDetalles_VentaDetalleId",
                         column: x => x.VentaDetalleId,
                         principalTable: "VentaDetalles",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(

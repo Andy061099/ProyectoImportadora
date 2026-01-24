@@ -1,7 +1,3 @@
-
-using System.Security.Cryptography.X509Certificates;
-using ImportadoraApi.Models;
-
 public class VentaDetalleCreateDto
 {
     public Guid InventarioProductoId { get; set; }
@@ -9,6 +5,6 @@ public class VentaDetalleCreateDto
     public decimal PrecioUnitario { get; set; }
     public decimal Impuestos { get; set; }
 
-    public ICollection<Pagos> Pagos { get; set; } = new List<Pagos>();
-
+    // 👇 SOLO DESGLOSE
+    public List<PagoCreateDto> Pagos { get; set; } = new();
 }

@@ -25,6 +25,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetAll()
         {
             var inventarios = await _context.Inventarios
+                .AsNoTracking()
                 .Include(i => i.Almacen)
                 .Include(i => i.Productos)
                     .ThenInclude(ip => ip.Producto)
@@ -43,7 +44,7 @@ namespace ImportadoraApi.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(ApiResponse<List<InventarioResponseDto>>.Ok(inventarios));
+            return Ok(ApiResponse<List<InventarioResponseDto>>.Ok(inventarios, "Inventarios obtenidos correctamente"));
         }
 
         // =========================
@@ -53,6 +54,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetById(Guid id)
         {
             var inventario = await _context.Inventarios
+                .AsNoTracking()
                 .Include(i => i.Almacen)
                 .Include(i => i.Productos)
                     .ThenInclude(ip => ip.Producto)
@@ -73,9 +75,9 @@ namespace ImportadoraApi.Controllers
                 .FirstOrDefaultAsync();
 
             if (inventario == null)
-                return NotFound(ApiResponse<string>.Fail("Inventario no encontrado"));
+                return NotFound(ApiResponse<InventarioResponseDto>.Fail("Inventario no encontrado", "INVENTARIO_NOT_FOUND"));
 
-            return Ok(ApiResponse<InventarioResponseDto>.Ok(inventario));
+            return Ok(ApiResponse<InventarioResponseDto>.Ok(inventario, "Inventario obtenido correctamente"));
         }
     }
 }

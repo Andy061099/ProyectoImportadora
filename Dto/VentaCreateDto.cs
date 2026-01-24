@@ -7,5 +7,7 @@ public class VentaCreateDto
 
     public decimal TotalPagado { get; set; }
 
-    public List<VentaDetalleCreateDto> Detalles { get; set; } = new List<VentaDetalleCreateDto>();
+    public TipoMoneda MonedaDeclarada { get; set; }
+
+    public List<VentaDetalleCreateDto> Detalles { get; set; } = new();
 }

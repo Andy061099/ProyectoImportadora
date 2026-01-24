@@ -16,7 +16,7 @@ namespace ImportadoraApi.Models
 
         public decimal Impuestos { get; set; }
 
-        public ICollection<Pagos> monedas { get; set; } = new List<Pagos>();
+        public ICollection<Pagos> Pagos { get; set; } = new List<Pagos>();
 
     }
 }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
 using Microsoft.AspNetCore.Authorization;
+using ImportadoraApi.Responses;
 
 namespace ImportadoraApi.Controllers
 {
@@ -17,40 +18,92 @@ namespace ImportadoraApi.Controllers
             _context = context;
         }
 
+        // =========================
         // GET: api/MovimientoInventario
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<MovimientoInventario>>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            return await _context.MovimientosInventario.ToListAsync();
+            var movimientos = await _context.MovimientosInventario
+                .AsNoTracking()
+                .ToListAsync();
+
+            var result = movimientos.Select(m => new MovimientoInventarioResponseDto
+            {
+                Id = m.Id,
+                InventarioProductoId = m.InventarioProductoId,
+                TipoMovimiento = m.TipoMovimiento,
+                Fecha = m.Fecha,
+                Cantidad = m.Cantidad,
+                StockAnterior = m.StockAnterior,
+                StockPosterior = m.StockPosterior,
+                Origen = m.OrSigen,
+                ReferenciaId = m.ReferenciaId,
+                Observaciones = m.Observaciones,
+                UsuarioId = m.UsuarioId
+            }).ToList();
+
+            return Ok(ApiResponse<List<MovimientoInventarioResponseDto>>
+                .Ok(result, "Movimientos de inventario obtenidos correctamente"));
         }
 
+        // =========================
         // GET: api/MovimientoInventario/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<MovimientoInventario>> GetById(Guid id)
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var movimientoInventario = await _context.MovimientosInventario
+            var m = await _context.MovimientosInventario
+                .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.Id == id);
 
-            if (movimientoInventario == null)
-                return NotFound();
+            if (m == null)
+                return NotFound(ApiResponse<string>.Fail(
+                    $"Movimiento con id {id} no encontrado",
+                    "MOVIMIENTO_404"
+                ));
 
-            return movimientoInventario;
+            var result = new MovimientoInventarioResponseDto
+            {
+                Id = m.Id,
+                InventarioProductoId = m.InventarioProductoId,
+                TipoMovimiento = m.TipoMovimiento,
+                Fecha = m.Fecha,
+                Cantidad = m.Cantidad,
+                StockAnterior = m.StockAnterior,
+                StockPosterior = m.StockPosterior,
+                Origen = m.OrSigen,
+                ReferenciaId = m.ReferenciaId,
+                Observaciones = m.Observaciones,
+                UsuarioId = m.UsuarioId
+            };
+
+            return Ok(ApiResponse<MovimientoInventarioResponseDto>
+                .Ok(result, "Movimiento obtenido correctamente"));
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteMovimientoInventario(Guid id)
-        {
-            var movimientoInventario = await _context.MovimientosInventario
-                .FirstOrDefaultAsync(m => m.Id == id);
+        // // =========================
+        // // DELETE: api/MovimientoInventario/{id}
+        // // =========================
+        // [HttpDelete("{id}")]
+        // public async Task<IActionResult> Delete(Guid id)
+        // {
+        //     var m = await _context.MovimientosInventario
+        //         .FirstOrDefaultAsync(m => m.Id == id);
 
-            if (movimientoInventario == null)
-                return NotFound();
+        //     if (m == null)
+        //         return NotFound(ApiResponse<string>.Fail(
+        //             $"Movimiento con id {id} no encontrado",
+        //             "MOVIMIENTO_404"
+        //         ));
 
-            _context.MovimientosInventario.Remove(movimientoInventario);
-            await _context.SaveChangesAsync();
+        //     _context.MovimientosInventario.Remove(m);
+        //     await _context.SaveChangesAsync();
 
-            return Ok();
-        }
-
+        //     return Ok(ApiResponse<string>.Ok(
+        //         "OK",
+        //         "Movimiento eliminado correctamente"
+        //     ));
+        // }
     }
 }

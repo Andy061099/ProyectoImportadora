@@ -11,7 +11,7 @@ namespace ImportadoraApi.Models
         public decimal MontoTotal { get; set; }
         public decimal MontoPendiente { get; set; }
 
-        public string Estado { get; set; } = "ABIERTA";
+        public EstadoConsigacion Estado { get; set; } = EstadoConsigacion.ABIERTA;
 
         public ICollection<ConsignacionMovimiento> Movimientos { get; set; } = new List<ConsignacionMovimiento>();
     }

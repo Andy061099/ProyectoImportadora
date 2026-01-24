@@ -25,6 +25,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetCostosPorContenedor(Guid contenedorId)
         {
             var costos = await _context.CostosContenedores
+                .AsNoTracking()
                 .Include(c => c.Contenedor)
                 .Where(c => c.ContenedorId == contenedorId)
                 .Select(c => new CostoContenedorResponseDto
@@ -38,7 +39,7 @@ namespace ImportadoraApi.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(ApiResponse<List<CostoContenedorResponseDto>>.Ok(costos));
+            return Ok(ApiResponse<List<CostoContenedorResponseDto>>.Ok(costos, "Costos obtenidos correctamente"));
         }
 
         // =========================
@@ -51,42 +52,66 @@ namespace ImportadoraApi.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
+            if (dto.Monto <= 0)
+                return BadRequest(ApiResponse<string>.Fail("El monto debe ser mayor que cero"));
+
             var contenedor = await _context.Contenedores
                 .FirstOrDefaultAsync(c => c.Id == dto.ContenedorId);
 
             if (contenedor == null)
                 return BadRequest(ApiResponse<string>.Fail("El contenedor no existe"));
 
-            // 1️⃣ Crear costo
-            var costo = new CostosContenedor
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
             {
-                Id = Guid.NewGuid(),
-                ContenedorId = dto.ContenedorId,
-                Moneda = dto.Moneda,
-                Monto = dto.Monto,
-                Observaciones = dto.Observaciones
-            };
+                // 1️⃣ Crear costo
+                var costo = new CostosContenedor
+                {
+                    Id = Guid.NewGuid(),
+                    ContenedorId = dto.ContenedorId,
+                    Moneda = dto.Moneda,
+                    Monto = dto.Monto,
+                    Observaciones = dto.Observaciones
+                };
 
-            _context.CostosContenedores.Add(costo);
+                _context.CostosContenedores.Add(costo);
 
-            // 2️⃣ Registro financiero
-            var registro = new RegistroFinanciero
+                // 2️⃣ Crear registro financiero
+                var registro = new RegistroFinanciero
+                {
+                    Id = Guid.NewGuid(),
+                    Fecha = DateTime.UtcNow,
+                    Tipo = TipoRegistroFinanciero.Gasto,
+                    Monto = dto.Monto,
+                    MonedaDeclarada = dto.Moneda,
+                    Observaciones = dto.Observaciones,
+                    ReferenciaTipo = "CostoContenedor",
+                    ReferenciaId = costo.Id
+                };
+
+                _context.RegistrosFinancieros.Add(registro);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var response = new CostoContenedorResponseDto
+                {
+                    Id = costo.Id,
+                    ContenedorId = costo.ContenedorId,
+                    CodigoContenedor = contenedor.Codigo,
+                    Moneda = costo.Moneda,
+                    Monto = costo.Monto,
+                    Observaciones = costo.Observaciones
+                };
+
+                return Ok(ApiResponse<CostoContenedorResponseDto>.Ok(response, "Costo agregado correctamente"));
+            }
+            catch
             {
-                Id = Guid.NewGuid(),
-                Fecha = DateTime.UtcNow,
-                Tipo = TipoRegistroFinanciero.Gasto,
-                Monto = dto.Monto,
-                Moneda = dto.Moneda,
-                Observaciones = dto.Observaciones,
-                ReferenciaTipo = "CostoContenedor",
-                ReferenciaId = costo.Id
-            };
-
-            _context.RegistrosFinancieros.Add(registro);
-
-            await _context.SaveChangesAsync();
-
-            return Ok(ApiResponse<string>.Ok("OK", "Costo agregado correctamente"));
+                await transaction.RollbackAsync();
+                return StatusCode(500, ApiResponse<string>.Fail("Error interno al registrar el costo", "INTERNAL_ERROR"));
+            }
         }
 
         // =========================
@@ -102,19 +127,40 @@ namespace ImportadoraApi.Controllers
             if (costo == null)
                 return NotFound(ApiResponse<string>.Fail("Costo no encontrado"));
 
-            // eliminar registro financiero
-            var registro = await _context.RegistrosFinancieros
-                .FirstOrDefaultAsync(r =>
-                    r.ReferenciaTipo == "CostoContenedor" &&
-                    r.ReferenciaId == costo.Id);
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
-            if (registro != null)
-                _context.RegistrosFinancieros.Remove(registro);
+            try
+            {
+                // eliminar registro financiero asociado
+                var registro = await _context.RegistrosFinancieros
+                    .FirstOrDefaultAsync(r =>
+                        r.ReferenciaTipo == "CostoContenedor" &&
+                        r.ReferenciaId == costo.Id);
 
-            _context.CostosContenedores.Remove(costo);
-            await _context.SaveChangesAsync();
+                if (registro != null)
+                    _context.RegistrosFinancieros.Remove(registro);
 
-            return Ok(ApiResponse<string>.Ok("OK", "Costo eliminado correctamente"));
+                _context.CostosContenedores.Remove(costo);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var response = new CostoContenedorResponseDto
+                {
+                    Id = costo.Id,
+                    ContenedorId = costo.ContenedorId,
+                    CodigoContenedor = (await _context.Contenedores.FindAsync(costo.ContenedorId))?.Codigo ?? "",
+                    Moneda = costo.Moneda,
+                    Monto = costo.Monto,
+                    Observaciones = costo.Observaciones
+                };
+
+                return Ok(ApiResponse<CostoContenedorResponseDto>.Ok(response, "Costo eliminado correctamente"));
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, ApiResponse<string>.Fail("Error interno al eliminar el costo", "INTERNAL_ERROR"));
+            }
         }
     }
 }

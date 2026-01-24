@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
 using Microsoft.AspNetCore.Authorization;
+using ImportadoraApi.Responses;
+using System.Security.Claims;
 
 namespace ImportadoraApi.Controllers
 {
@@ -16,105 +18,177 @@ namespace ImportadoraApi.Controllers
         {
             _context = context;
         }
-        // GET: api/producto
+
+        // =========================
+        // GET: api/merma
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Merma>>> GetMerma()
+        public async Task<IActionResult> GetAll()
         {
-            var mermas = await _context.Mermas
+            var data = await _context.Mermas
+                .Include(m => m.Producto)
+                .Include(m => m.Almacen)
                 .AsNoTracking()
+                .Select(m => new MermaResponseDto
+                {
+                    MermaId = m.Id,
+                    Producto = m.Producto.Nombre,
+                    Almacen = m.Almacen.nombre,
+                    Cantidad = m.Cantidad,
+                    Fecha = m.Fecha,
+                    Motivo = m.Motivo,
+
+                })
                 .ToListAsync();
 
-            return Ok(mermas);
+            return Ok(ApiResponse<List<MermaResponseDto>>
+                .Ok(data, "Mermas obtenidas correctamente"));
         }
 
+        // =========================
+        // GET: api/merma/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<Merma>> GetProductoById(Guid id)
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var producto = await _context.Mermas
-            .Include(c => c.Producto)
-            .Include(C => C.Almacen)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id);
+            var data = await _context.Mermas
+                .Include(m => m.Producto)
+                .Include(m => m.Almacen)
+                .AsNoTracking()
+                .Where(m => m.Id == id)
+                .Select(m => new MermaResponseDto
+                {
+                    MermaId = m.Id,
+                    Producto = m.Producto.Nombre,
+                    Almacen = m.Almacen.nombre,
+                    Cantidad = m.Cantidad,
+                    Fecha = m.Fecha,
+                    Motivo = m.Motivo,
 
-            if (producto == null)
-                return NotFound($"Producto con id {id} no encontrado");
+                })
+                .FirstOrDefaultAsync();
 
-            return Ok(producto);
+            if (data == null)
+                return NotFound(ApiResponse<string>.Fail(
+                    "Merma no encontrada",
+                    "MERMA_404"
+                ));
+
+            return Ok(ApiResponse<MermaResponseDto>
+                .Ok(data, "Merma obtenida correctamente"));
         }
 
+        // =========================
+        // POST: api/merma
+        // =========================
         [HttpPost]
-        public async Task<IActionResult> CreateMerma([FromBody] Merma merma)
+        public async Task<IActionResult> Create([FromBody] MermaCreateDto merma)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<string>.Fail(
+                    "Datos inválidos",
+                    "MERMA_001"
+                ));
 
-            if (ModelState.IsValid == false)
-            {
-                return BadRequest(ModelState);
-            }
-            // Validación básica
-            if (merma == null)
-                return BadRequest("El *** es obligatorio.");
+            var inventarioProducto = await _context.InventarioProductos
+                .Include(ip => ip.Inventario)
+                    .ThenInclude(i => i.Almacen)
+                .Include(ip => ip.Producto)
+                .FirstOrDefaultAsync(ip =>
+                    ip.ProductoId == merma.ProductoId &&
+                    ip.Inventario.AlmacenId == merma.AlmacenId);
 
+            if (inventarioProducto == null)
+                return BadRequest(ApiResponse<string>.Fail(
+                    "El producto no existe en este almacén",
+                    "MERMA_002"
+                ));
 
-            var productoinventario = await _context.InventarioProductos
-            .FirstOrDefaultAsync(c => c.ProductoId == merma.ProductoId &&
-            c.Inventario.AlmacenId == merma.AlmacenId);
+            var disponible = inventarioProducto.StockActual;
+            if (merma.Cantidad > disponible)
+                return BadRequest(ApiResponse<string>.Fail(
+                    "La cantidad supera el stock disponible",
+                    "MERMA_003"
+                ));
 
+            // Usar la misma fecha para todo
+            var fechaAhora = DateTime.UtcNow;
+            var mermaId = Guid.NewGuid();
+            var stockAnterior = inventarioProducto.StockActual;
+            var stockPosterior = stockAnterior - merma.Cantidad;
 
-            if (productoinventario == null)
-                return BadRequest("Este producto no existe en este almacen");
-
-
-            if (productoinventario.StockActual < merma.Cantidad)
-            {
-                return BadRequest("la cantidad que quiere dar baja por merma supera la cantidad real");
-            }
-
-            merma.Id = Guid.NewGuid();
-
-
+            // =========================
+            // Movimiento de inventario
+            // =========================
             var movimiento = new MovimientoInventario
             {
                 Id = Guid.NewGuid(),
+                InventarioProductoId = inventarioProducto.Id,
                 Cantidad = merma.Cantidad,
-                InventarioProductoId = productoinventario.Id,
-                InventarioProducto = productoinventario,
-                ReferenciaId = merma.Id,
-                StockAnterior = productoinventario.StockActual,
-                StockPosterior = productoinventario.StockActual = -merma.Cantidad,
+                StockAnterior = stockAnterior,
+                StockPosterior = stockPosterior,
                 TipoMovimiento = TipoMovimientoInventario.Salida,
                 OrSigen = Origen.Merma,
+                ReferenciaId = mermaId,
                 Observaciones = merma.Motivo,
-
+                UsuarioId = merma.UsuarioId,
+                Fecha = fechaAhora
             };
+            inventarioProducto.StockActual = stockPosterior;
+            _context.MovimientosInventario.Add(movimiento);
 
+            // =========================
+            // Registro financiero
+            // =========================
             _context.RegistrosFinancieros.Add(new RegistroFinanciero
             {
                 Id = Guid.NewGuid(),
-                AlmacenId = productoinventario.Inventario.AlmacenId,
-                Almacen = productoinventario.Inventario.Almacen,
-                ReferenciaId = merma.Id,
+                AlmacenId = inventarioProducto.Inventario.AlmacenId,
+                ReferenciaId = mermaId,
+                ReferenciaTipo = "Merma de producto",
                 Observaciones = merma.Motivo,
                 Tipo = TipoRegistroFinanciero.Gasto,
-                Monto = productoinventario.Producto.CostoUnitario * merma.Cantidad,
-                Moneda = productoinventario.Producto.MonedaDeEntrada,
-                ReferenciaTipo = "Producto sacado del almacén por Merma",
-
-
+                Monto = inventarioProducto.Producto.CostoUnitario * merma.Cantidad,
+                MonedaDeclarada = inventarioProducto.Producto.MonedaDeEntrada,
+                Fecha = fechaAhora,
+                UsuarioId = merma.UsuarioId
             });
-            productoinventario.StockActual = movimiento.StockPosterior;
-            _context.Mermas.Add(merma);
+
+            // =========================
+            // Entidad Merma
+            // =========================
+            var mermaEntity = new Merma
+            {
+                Id = mermaId,
+                ProductoId = merma.ProductoId,
+                AlmacenId = merma.AlmacenId,
+                Cantidad = merma.Cantidad,
+                Motivo = merma.Motivo,
+                UsuarioId = merma.UsuarioId,
+                Fecha = fechaAhora,
+
+            };
+            _context.Mermas.Add(mermaEntity);
+
             await _context.SaveChangesAsync();
 
-            return Ok(movimiento);
+            // =========================
+            // DTO de respuesta
+            // =========================
+            var response = new MermaResponseDto
+            {
+                MermaId = mermaId,
+                Producto = inventarioProducto.Producto.Nombre,
+                Almacen = inventarioProducto.Inventario.Almacen!.nombre,
+                Cantidad = merma.Cantidad,
+                Fecha = fechaAhora,
+                Motivo = merma.Motivo,
+                StockAnterior = stockAnterior,
+                StockPosterior = stockPosterior
+            };
 
-
-
+            return Ok(ApiResponse<MermaResponseDto>
+                .Ok(response, "Merma registrada correctamente"));
         }
-
-
-
-
-
-
     }
 }

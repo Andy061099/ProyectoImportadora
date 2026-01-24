@@ -25,6 +25,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetDetalles()
         {
             var detalles = await _context.ContenedorDetalles
+                .AsNoTracking()
                 .Include(d => d.Producto)
                 .Include(d => d.Contenedor)
                 .OrderByDescending(d => d.Contenedor.FechaArribo)
@@ -54,6 +55,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetDetalle(Guid id)
         {
             var detalle = await _context.ContenedorDetalles
+                .AsNoTracking()
                 .Include(d => d.Producto)
                 .Include(d => d.Contenedor)
                 .Where(d => d.Id == id)
@@ -86,7 +88,9 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetDetallesPorContenedor(Guid contenedorId)
         {
             var detalles = await _context.ContenedorDetalles
+                .AsNoTracking()
                 .Include(d => d.Producto)
+                .Include(d => d.Contenedor)
                 .Where(d => d.ContenedorId == contenedorId)
                 .Select(d => new ContenedorDetalleResponseDto
                 {
@@ -117,11 +121,28 @@ namespace ImportadoraApi.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
+            if (dto.CantidadRecibida <= 0 || dto.CantProductosPorPacka <= 0)
+                return BadRequest(ApiResponse<string>.Fail("Las cantidades deben ser mayores que cero"));
+
+            if (dto.CantidadMerma > dto.CantidadRecibida)
+                return BadRequest(ApiResponse<string>.Fail("La merma no puede ser mayor a la cantidad recibida"));
+
             var contenedor = await _context.Contenedores
-                .FirstOrDefaultAsync(c => c.Id == dto.ContenedorId);
+                .FirstOrDefaultAsync(c =>
+                    c.Id == dto.ContenedorId &&
+                    c.Estado == EstadoContenedor.EnProceso);
 
             if (contenedor == null)
-                return BadRequest(ApiResponse<string>.Fail("El contenedor no existe"));
+                return BadRequest(ApiResponse<string>.Fail("El contenedor no existe o no está en proceso"));
+
+            var productoExiste = await _context.ContenedorDetalles
+                .AnyAsync(d =>
+                    d.ContenedorId == dto.ContenedorId &&
+                    d.ProductoId == dto.ProductoId);
+
+            if (productoExiste)
+                return Conflict(ApiResponse<string>.Fail(
+                    "El producto ya existe en este contenedor"));
 
             var producto = await _context.Productos
                 .FirstOrDefaultAsync(p => p.Id == dto.ProductoId);
@@ -135,7 +156,7 @@ namespace ImportadoraApi.Controllers
                 ContenedorId = dto.ContenedorId,
                 ProductoId = dto.ProductoId,
                 CantidadRecibida = dto.CantidadRecibida,
-                Cantidadactual = dto.CantidadRecibida,
+                Cantidadactual = dto.CantidadRecibida - dto.CantidadMerma,
                 Packa = dto.Packa,
                 Cantproductosxpacka = dto.CantProductosPorPacka,
                 Cantidadmerma = dto.CantidadMerma,
@@ -155,6 +176,12 @@ namespace ImportadoraApi.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateDetalle(Guid id, [FromBody] PostContenedorDetalleDto dto)
         {
+            if (dto.CantidadRecibida <= 0 || dto.CantProductosPorPacka <= 0)
+                return BadRequest(ApiResponse<string>.Fail("Las cantidades deben ser mayores que cero"));
+
+            if (dto.CantidadMerma > dto.CantidadRecibida)
+                return BadRequest(ApiResponse<string>.Fail("La merma no puede ser mayor a la cantidad recibida"));
+
             var detalle = await _context.ContenedorDetalles
                 .Include(d => d.Distribuciones)
                 .FirstOrDefaultAsync(d => d.Id == id);
@@ -163,14 +190,17 @@ namespace ImportadoraApi.Controllers
                 return NotFound(ApiResponse<string>.Fail("Detalle no encontrado"));
 
             if (detalle.Distribuciones.Any())
-                return BadRequest(ApiResponse<string>.Fail("No se puede modificar un detalle ya distribuido"));
+                return BadRequest(ApiResponse<string>.Fail(
+                    "No se puede modificar un detalle que ya tiene distribuciones"));
 
             detalle.CantidadRecibida = dto.CantidadRecibida;
-            detalle.Cantidadactual = dto.CantidadRecibida;
             detalle.Packa = dto.Packa;
             detalle.Cantproductosxpacka = dto.CantProductosPorPacka;
             detalle.Cantidadmerma = dto.CantidadMerma;
             detalle.CostoUnitario = dto.CostoUnitario;
+
+            // ⚠ NO se resetea CantidadActual a ciegas
+            detalle.Cantidadactual = dto.CantidadRecibida - dto.CantidadMerma;
 
             await _context.SaveChangesAsync();
 

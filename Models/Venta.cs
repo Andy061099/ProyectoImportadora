@@ -13,10 +13,11 @@ namespace ImportadoraApi.Models
 
         public string? Cliente { get; set; }
 
+        public TipoMoneda MonedaDeclarada { get; set; }
         public decimal Total { get; set; }
         public decimal TotalPagado { get; set; }
 
-        public string Estado { get; set; } = "PAGADA";
+        public EstadoVenta Estado { get; set; } = EstadoVenta.Pagada;
 
         public ICollection<VentaDetalle> Detalles { get; set; } = new List<VentaDetalle>();
 

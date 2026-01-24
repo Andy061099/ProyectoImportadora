@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ImportadoraApi.Models;
 using Microsoft.AspNetCore.Authorization;
+using ImportadoraApi.Responses;
 
 namespace ImportadoraApi.Controllers
 {
@@ -17,59 +18,125 @@ namespace ImportadoraApi.Controllers
             _context = context;
         }
 
+        // =========================
         // GET: api/InventarioProducto
+        // =========================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<InventarioProducto>>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            return await _context.InventarioProductos
+            var data = await _context.InventarioProductos
+                .AsNoTracking()
                 .Include(ip => ip.Producto)
-                .Include(ip => ip.Inventario)
+                .Select(ip => new InventarioProductoResponseDto
+                {
+                    ProductoId = ip.ProductoId,
+                    NombreProducto = ip.Producto.Nombre,
+                    StockActual = ip.StockActual,
+                    Packa = ip.Packa,
+                    CantidadPorPacka = ip.Packa ? ip.Cantproductosxpacka : 0,
+                    TotalPackas = ip.Packa && ip.Cantproductosxpacka > 0
+                        ? ip.StockActual / ip.Cantproductosxpacka
+                        : 0
+                })
                 .ToListAsync();
+
+            return Ok(ApiResponse<List<InventarioProductoResponseDto>>.Ok(
+                data,
+                "Inventario obtenido correctamente"
+            ));
         }
 
-
+        // =========================
         // GET: api/InventarioProducto/{id}
+        // =========================
         [HttpGet("{id}")]
-        public async Task<ActionResult<InventarioProducto>> GetById(Guid id)
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var inventarioProducto = await _context.InventarioProductos
+            var data = await _context.InventarioProductos
+                .AsNoTracking()
                 .Include(ip => ip.Producto)
-                .Include(ip => ip.Inventario)
-                .FirstOrDefaultAsync(ip => ip.Id == id);
+                .Where(ip => ip.Id == id)
+                .Select(ip => new InventarioProductoResponseDto
+                {
+                    ProductoId = ip.ProductoId,
+                    NombreProducto = ip.Producto.Nombre,
+                    StockActual = ip.StockActual,
+                    Packa = ip.Packa,
+                    CantidadPorPacka = ip.Packa ? ip.Cantproductosxpacka : 0,
+                    TotalPackas = ip.Packa && ip.Cantproductosxpacka > 0
+                        ? ip.StockActual / ip.Cantproductosxpacka
+                        : 0
+                })
+                .FirstOrDefaultAsync();
 
-            if (inventarioProducto == null)
-                return NotFound();
+            if (data == null)
+                return NotFound(ApiResponse<InventarioProductoResponseDto>.Fail(
+                    "Producto de inventario no encontrado",
+                    "INV_404"
+                ));
 
-            return inventarioProducto;
+            return Ok(ApiResponse<InventarioProductoResponseDto>.Ok(
+                data,
+                "Producto de inventario obtenido correctamente"
+            ));
         }
 
+        // =========================
         // PUT: api/InventarioProducto/{id}
+        // =========================
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] InventarioProducto inventarioProducto)
+        public async Task<IActionResult> Update(
+            Guid id,
+            [FromBody] InventarioProductoUpdateDto dto)
         {
-            if (ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-            if (id != inventarioProducto.Id)
-                return BadRequest("El id de la URL no coincide con el id del cuerpo.");
-
             var inventarioProductoDb = await _context.InventarioProductos
                 .FirstOrDefaultAsync(ip => ip.Id == id);
 
             if (inventarioProductoDb == null)
-                return NotFound();
+                return NotFound(ApiResponse<InventarioProductoResponseDto>.Fail(
+                    "Producto de inventario no encontrado",
+                    "INV_404"
+                ));
 
+            // 🔐 Reglas de negocio
+            if (!dto.Packa)
+            {
+                inventarioProductoDb.Packa = false;
+                inventarioProductoDb.Cantproductosxpacka = 0;
+            }
+            else
+            {
+                if (dto.Cantproductosxpacka <= 0)
+                    return BadRequest(ApiResponse<InventarioProductoResponseDto>.Fail(
+                        "Cantidad por packa inválida",
+                        "INV_002"
+                    ));
 
-
-            inventarioProductoDb.Packa = inventarioProducto.Packa;
-            inventarioProductoDb.Cantproductosxpacka = inventarioProducto.Cantproductosxpacka;
-
+                inventarioProductoDb.Packa = true;
+                inventarioProductoDb.Cantproductosxpacka = dto.Cantproductosxpacka;
+            }
 
             await _context.SaveChangesAsync();
 
-            return Ok();
-        }
+            // devolver DTO actualizado
+            var responseDto = new InventarioProductoResponseDto
+            {
+                ProductoId = inventarioProductoDb.ProductoId,
+                NombreProducto = inventarioProductoDb.Producto?.Nombre ?? "",
+                StockActual = inventarioProductoDb.StockActual,
+                Packa = inventarioProductoDb.Packa,
+                CantidadPorPacka = inventarioProductoDb.Packa ? inventarioProductoDb.Cantproductosxpacka : 0,
+                TotalPackas = inventarioProductoDb.Packa && inventarioProductoDb.Cantproductosxpacka > 0
+                    ? inventarioProductoDb.StockActual / inventarioProductoDb.Cantproductosxpacka
+                    : 0
+            };
 
+            return Ok(ApiResponse<InventarioProductoResponseDto>.Ok(
+                responseDto,
+                "Producto de inventario actualizado correctamente"
+            ));
+        }
     }
+
+
 }

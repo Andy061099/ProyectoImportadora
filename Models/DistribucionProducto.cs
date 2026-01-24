@@ -17,5 +17,6 @@ namespace ImportadoraApi.Models
         public DateTime Fecha { get; set; } = DateTime.UtcNow;
 
         public Guid UsuarioId { get; set; }
+
     }
 }

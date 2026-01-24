@@ -18,7 +18,9 @@ namespace ImportadoraApi.Models
 
         public decimal Cantproductosxpacka { get; set; }
 
-        public decimal CantidaddePacka => StockActual / Cantproductosxpacka;
+        public decimal CantidaddePacka =>
+    Cantproductosxpacka > 0 ? StockActual / Cantproductosxpacka : 0;
+
 
         public ICollection<MovimientoInventario> Movimientos { get; set; } = new List<MovimientoInventario>();
 

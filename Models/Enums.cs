@@ -25,6 +25,20 @@ public enum Origen
     CompraProductos = 4
 }
 
+public enum EstadoConsigacion
+{
+    ABIERTA = 1,
+
+    CERRADA = 2
+
+}
+public enum EstadoVenta
+{
+    Pagada = 1,
+
+    ABIERTA = 0
+}
+
 public enum TipoMoneda
 {
     Cup = 1,

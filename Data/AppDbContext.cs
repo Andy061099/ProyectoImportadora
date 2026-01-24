@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
     public DbSet<Producto> Productos { get; set; } = null!;
     public DbSet<MovimientoInventario> MovimientosInventario { get; set; } = null!;
 
+    public DbSet<Pagos> Pagos { get; set; } = null!;
+
     public DbSet<Merma> Mermas { get; set; } = null!;
     public DbSet<Venta> Ventas { get; set; } = null!;
     public DbSet<VentaDetalle> VentaDetalles { get; set; } = null!;
@@ -138,6 +140,12 @@ public class AppDbContext : DbContext
         .HasMany(IP => IP.Movimientos)
         .WithOne(M => M.InventarioProducto)
         .HasForeignKey(M => M.InventarioProductoId).OnDelete(DeleteBehavior.Cascade);
+
+
+        modelBuilder.Entity<VentaDetalle>()
+        .HasMany(x => x.Pagos)
+        .WithOne(x => x.VentaDetalle)
+        .HasForeignKey(M => M.VentaDetalleId).OnDelete(DeleteBehavior.Cascade);
 
 
 

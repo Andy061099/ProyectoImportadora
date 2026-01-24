@@ -26,6 +26,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetDistribuciones()
         {
             var distribuciones = await _context.DistribucionProductos
+                .AsNoTracking()
                 .Include(d => d.Producto)
                 .Include(d => d.Almacen)
                 .OrderByDescending(d => d.Fecha)
@@ -41,7 +42,7 @@ namespace ImportadoraApi.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(ApiResponse<List<DistribucionProductoResponseDto>>.Ok(distribuciones));
+            return Ok(ApiResponse<List<DistribucionProductoResponseDto>>.Ok(distribuciones, "Distribuciones obtenidas correctamente"));
         }
 
         // =========================
@@ -51,6 +52,7 @@ namespace ImportadoraApi.Controllers
         public async Task<IActionResult> GetDistribucion(Guid id)
         {
             var distribucion = await _context.DistribucionProductos
+                .AsNoTracking()
                 .Include(d => d.Producto)
                 .Include(d => d.Almacen)
                 .Where(d => d.Id == id)
@@ -67,9 +69,9 @@ namespace ImportadoraApi.Controllers
                 .FirstOrDefaultAsync();
 
             if (distribucion == null)
-                return NotFound(ApiResponse<string>.Fail("Distribución no encontrada"));
+                return NotFound(ApiResponse<DistribucionProductoResponseDto>.Fail("Distribución no encontrada", "DISTRIBUCION_NOT_FOUND"));
 
-            return Ok(ApiResponse<DistribucionProductoResponseDto>.Ok(distribucion));
+            return Ok(ApiResponse<DistribucionProductoResponseDto>.Ok(distribucion, "Distribución obtenida correctamente"));
         }
 
         // =========================
@@ -82,16 +84,20 @@ namespace ImportadoraApi.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ApiResponse<string>.Fail("Datos inválidos"));
 
-            // =========================
-            // 1️⃣ Validar detalle origen
-            // =========================
+            if (dto.Cantidad <= 0)
+                return BadRequest(ApiResponse<string>.Fail("La cantidad debe ser mayor que cero"));
+
             var detalle = await _context.ContenedorDetalles
                 .Include(d => d.Distribuciones)
                 .FirstOrDefaultAsync(d => d.Id == dto.OrigenId);
 
+            var almacen = await _context.Almacenes
+                .FirstOrDefaultAsync(a => a.id == dto.AlmacenId);
+
+            if (almacen == null)
+                return BadRequest(ApiResponse<string>.Fail("Almacén no encontrado"));
             if (detalle == null)
                 return BadRequest(ApiResponse<string>.Fail("Detalle de contenedor no encontrado"));
-
             if (detalle.ProductoId != dto.ProductoId)
                 return BadRequest(ApiResponse<string>.Fail("El producto no coincide con el detalle de origen"));
 
@@ -101,81 +107,104 @@ namespace ImportadoraApi.Controllers
             if (dto.Cantidad > disponible)
                 return BadRequest(ApiResponse<string>.Fail("La cantidad supera lo disponible en el contenedor"));
 
-            // =========================
-            // 2️⃣ Crear distribución
-            // =========================
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized(ApiResponse<string>.Fail("Usuario no autenticado"));
 
-            var distribucion = new DistribucionProducto
+            var userId = Guid.Parse(userIdClaim);
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                Id = Guid.NewGuid(),
-                OrigenId = dto.OrigenId,
-                ProductoId = dto.ProductoId,
-                AlmacenId = dto.AlmacenId,
-                Cantidad = dto.Cantidad,
-                Fecha = DateTime.UtcNow,
-                UsuarioId = Guid.Parse(userId!)
-            };
-
-            _context.DistribucionProductos.Add(distribucion);
-
-            // =========================
-            // 3️⃣ InventarioProducto
-            // =========================
-            var inventarioProducto = await _context.InventarioProductos
-                .Include(ip => ip.Inventario)
-                .FirstOrDefaultAsync(ip =>
-                    ip.Inventario.AlmacenId == dto.AlmacenId &&
-                    ip.ProductoId == dto.ProductoId);
-
-            if (inventarioProducto == null)
-            {
-                var inventario = await _context.Inventarios
-                    .FirstOrDefaultAsync(i => i.AlmacenId == dto.AlmacenId);
-
-                if (inventario == null)
-                    return BadRequest(ApiResponse<string>.Fail("El almacén no tiene inventario creado"));
-
-                inventarioProducto = new InventarioProducto
+                // =========================
+                // Crear distribución
+                // =========================
+                var distribucion = new DistribucionProducto
                 {
                     Id = Guid.NewGuid(),
-                    InventarioId = inventario.Id,
+                    OrigenId = dto.OrigenId,
                     ProductoId = dto.ProductoId,
-                    StockActual = 0
+                    AlmacenId = dto.AlmacenId,
+                    Cantidad = dto.Cantidad,
+                    Fecha = DateTime.UtcNow,
+                    UsuarioId = userId
+                };
+                _context.DistribucionProductos.Add(distribucion);
+
+                // =========================
+                // InventarioProducto
+                // =========================
+                var inventarioProducto = await _context.InventarioProductos
+                    .Include(ip => ip.Inventario)
+                    .FirstOrDefaultAsync(ip =>
+                        ip.Inventario.AlmacenId == dto.AlmacenId &&
+                        ip.ProductoId == dto.ProductoId);
+
+                if (inventarioProducto == null)
+                {
+                    var inventario = await _context.Inventarios
+                        .FirstOrDefaultAsync(i => i.AlmacenId == dto.AlmacenId);
+
+                    if (inventario == null)
+                        return BadRequest(ApiResponse<string>.Fail("El almacén no tiene inventario creado"));
+
+                    inventarioProducto = new InventarioProducto
+                    {
+                        Id = Guid.NewGuid(),
+                        InventarioId = inventario.Id,
+                        ProductoId = dto.ProductoId,
+                        StockActual = 0
+                    };
+                    _context.InventarioProductos.Add(inventarioProducto);
+                }
+
+                // =========================
+                // Movimiento inventario
+                // =========================
+                var stockAnterior = inventarioProducto.StockActual;
+                inventarioProducto.StockActual += dto.Cantidad;
+
+                var movimiento = new MovimientoInventario
+                {
+                    Id = Guid.NewGuid(),
+                    InventarioProductoId = inventarioProducto.Id,
+                    TipoMovimiento = TipoMovimientoInventario.Entrada,
+                    Fecha = DateTime.UtcNow,
+                    Cantidad = dto.Cantidad,
+                    StockAnterior = stockAnterior,
+                    StockPosterior = inventarioProducto.StockActual,
+                    ReferenciaId = dto.OrigenId,
+                    Observaciones = "Distribución desde contenedor a almacén"
+                };
+                _context.MovimientosInventario.Add(movimiento);
+
+                // =========================
+                // Guardar todo
+                // =========================
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                // =========================
+                // Preparar DTO de respuesta
+                // =========================
+                var response = new DistribucionProductoResponseDto
+                {
+                    Id = distribucion.Id,
+                    ProductoId = distribucion.ProductoId,
+                    NombreProducto = (await _context.Productos.FindAsync(distribucion.ProductoId))?.Nombre ?? "",
+                    AlmacenId = distribucion.AlmacenId,
+                    NombreAlmacen = almacen.nombre,
+                    Cantidad = distribucion.Cantidad,
+                    Fecha = distribucion.Fecha
                 };
 
-                _context.InventarioProductos.Add(inventarioProducto);
+                return Ok(ApiResponse<DistribucionProductoResponseDto>.Ok(response, "Distribución realizada correctamente"));
             }
-
-            // =========================
-            // 4️⃣ Movimiento inventario
-            // =========================
-            var stockAnterior = inventarioProducto.StockActual;
-            var stockPosterior = stockAnterior + dto.Cantidad;
-
-            var movimiento = new MovimientoInventario
+            catch
             {
-                Id = Guid.NewGuid(),
-                InventarioProductoId = inventarioProducto.Id,
-                TipoMovimiento = TipoMovimientoInventario.Entrada,
-                Fecha = DateTime.UtcNow,
-                Cantidad = dto.Cantidad,
-                StockAnterior = stockAnterior,
-                StockPosterior = stockPosterior,
-                ReferenciaId = dto.OrigenId,
-                Observaciones = "Distribución desde contenedor a almacén"
-            };
-
-            inventarioProducto.StockActual = stockPosterior;
-
-            _context.MovimientosInventario.Add(movimiento);
-
-            // =========================
-            // 5️⃣ Guardar todo
-            // =========================
-            await _context.SaveChangesAsync();
-
-            return Ok(ApiResponse<string>.Ok("OK", "Distribución realizada correctamente"));
+                await transaction.RollbackAsync();
+                return StatusCode(500, ApiResponse<string>.Fail("Error interno al registrar la distribución", "INTERNAL_ERROR"));
+            }
         }
     }
 }
